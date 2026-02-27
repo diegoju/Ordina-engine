@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: LexIA API
+  version: 2.0.0
+  description: API unificada para legislaciones y jurisprudencia (SJF) normalizada para GPT.
+
+servers:
+  - url: https://legislaciones-api.vercel.app
+
+paths:
+  /health:
+    get:
+      operationId: healthLexIA
+      summary: Estado del servicio
+      responses:
+        "200":
+          description: Servicio disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+                required:
+                  - status
+                  - service
+
+  /ley:
+    get:
+      operationId: buscarLey
+      summary: Buscar leyes por id categoria o nombre
+      parameters:
+        - name: id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: nombre
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de leyes encontradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    categoria:
+                      type: integer
+                    nombre:
+                      type: string
+
+  /jurisprudencia/buscar:
+    get:
+      operationId: buscarJurisprudencia
+      summary: Buscar jurisprudencia SJF por termino simple
+      description: Si no se envia q devuelve resultados generales con filtros por defecto.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          example: amparo
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado paginado normalizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurisprudenciaSearchResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con SJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarJurisprudenciaAvanzada
+      summary: Buscar jurisprudencia SJF con payload avanzado
+      description: Envia el body completo del formato de busqueda SJF.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                classifiers:
+                  type: array
+                  items:
+                    type: object
+                    properties: {}
+                searchTerms:
+                  type: array
+                  items:
+                    type: object
+                    properties: {}
+                bFacet:
+                  type: boolean
+                ius:
+                  type: array
+                  items:
+                    type: integer
+                idApp:
+                  type: string
+                lbSearch:
+                  type: array
+                  items:
+                    type: string
+                filterExpression:
+                  type: string
+      responses:
+        "200":
+          description: Resultado paginado normalizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurisprudenciaSearchResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con SJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jurisprudencia/detalle:
+    get:
+      operationId: obtenerDetalleJurisprudencia
+      summary: Obtener detalle de tesis por IUS
+      description: Si no se envia isSemanal el proxy prueba true y luego false.
+      parameters:
+        - name: ius
+          in: query
+          required: true
+          schema:
+            type: integer
+          example: 2031780
+        - name: isSemanal
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: hostName
+          in: query
+          required: false
+          schema:
+            type: string
+            default: https://sjf2.scjn.gob.mx
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Detalle normalizado de tesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurisprudenciaDetailResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con SJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    JurisprudenciaItem:
+      type: object
+      properties:
+        ius:
+          type: integer
+          nullable: true
+        isSemanal:
+          type: boolean
+          nullable: true
+        rubro:
+          type: string
+        fechaPublicacion:
+          type: string
+        instancia:
+          type: string
+        epoca:
+          type: string
+        tipoDocumento:
+          type: string
+        textoSnippet:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    JurisprudenciaSearchResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        count:
+          type: integer
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JurisprudenciaItem"
+      required:
+        - total
+        - totalPages
+        - page
+        - size
+        - count
+        - hasMore
+        - items
+
+    JurisprudenciaDetailResponse:
+      type: object
+      properties:
+        ius:
+          type: integer
+        isSemanalUsed:
+          type: boolean
+        hostName:
+          type: string
+        rubro:
+          type: string
+        fechaPublicacion:
+          type: string
+        titulo:
+          type: string
+        texto:
+          type: string
+        textoPlano:
+          type: string
+        raw:
+          type: object
+          properties: {}
+      required:
+        - ius
+        - isSemanalUsed
+        - hostName
+        - rubro
+        - texto
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
