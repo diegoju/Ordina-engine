@@ -62,6 +62,13 @@ La mayoría de consultas siguen este orden:
 2. Buscar jurisprudencia por término (opcional).
 3. Consultar artículos usando esos identificadores.
 
+### 🔎 Nota sobre `idLegislacion` y `categoria`
+
+- `idLegislacion` identifica la ley específica.
+- `categoria` define la ruta de consulta en Jurislex.
+- Para evitar errores, primero consulta `/ley` y luego usa esos valores en `/jurislex/articulos/*`.
+- Si el artículo tiene formato especial (por ejemplo `167-B`), busca primero por número base (`167`) y después selecciona el resultado correcto.
+
 ## 📡 Endpoints principales
 
 ### 1️⃣ Estado del servicio
@@ -190,3 +197,7 @@ Solo necesarias si alguna fuente bloquea solicitudes:
 
 - `SJF_COOKIE`
 - `JURISLEX_COOKIE`
+
+## ✅ Verificación automática
+
+El repositorio incluye un workflow de GitHub Actions (`.github/workflows/smoke-tests.yml`) que ejecuta `smoke_test.py` en cada push a `main`.

@@ -172,8 +172,9 @@ def _normalize_doc(doc, include_raw=False):
     else:
         is_semanal = semanal_raw is True or semanal_raw == 1 or str(semanal_raw) == "1"
 
-    rubro = str(doc.get("rubro") or doc.get("rubroTexto") or "").strip().upper()
+    rubro = _strip_html(doc.get("rubro") or doc.get("rubroTexto") or "").upper()
     texto = str(doc.get("textoPublicacion") or doc.get("texto") or "")
+    texto_snippet = _strip_html(texto)[:500]
 
     item = {
         "ius": ius,
@@ -183,7 +184,7 @@ def _normalize_doc(doc, include_raw=False):
         "instancia": doc.get("instancia") or "",
         "epoca": doc.get("epoca") or "",
         "tipoDocumento": doc.get("tipoDocumento") or "",
-        "textoSnippet": texto[:500],
+        "textoSnippet": texto_snippet,
     }
     if include_raw:
         item["raw"] = doc
@@ -374,15 +375,18 @@ def sjf_detail(
     elif isinstance(data, str):
         texto = data
 
+    rubro_raw = data.get("rubro") if isinstance(data, dict) else ""
+    titulo_raw = (data.get("titulo") or data.get("title")) if isinstance(data, dict) else ""
+
     response = {
         "ius": ius,
         "isSemanalUsed": used is True,
         "hostName": hostName,
-        "rubro": str(data.get("rubro") if isinstance(data, dict) else "").upper(),
+        "rubro": _strip_html(rubro_raw).upper(),
         "fechaPublicacion": str(data.get("fechaPublicacion") if isinstance(data, dict) else ""),
-        "titulo": str((data.get("titulo") or data.get("title")) if isinstance(data, dict) else ""),
+        "titulo": "" if titulo_raw in (None, "None") else str(titulo_raw),
         "texto": texto,
-        "textoPlano": texto.replace("\r\n", "\n").strip(),
+        "textoPlano": _strip_html(texto),
     }
     if includeRaw:
         response["raw"] = data
