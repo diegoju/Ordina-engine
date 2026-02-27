@@ -1,6 +1,6 @@
-# Ordina-api
+# Ordina-engine
 
-Ordina-api es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
+Ordina-engine es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
 
 Su objetivo es simplificar el acceso técnico a:
 
@@ -10,9 +10,9 @@ Su objetivo es simplificar el acceso técnico a:
 
 ## ⚠️ Disclaimer
 
-Ordina-api y el chat oficial de Ordina son proyectos independientes y no oficiales.
+Ordina-engine y el chat oficial de Ordina son proyectos independientes y no oficiales.
 
-Ordina-api funciona como una capa técnica para facilitar la consulta de información jurídica pública disponible en sitios institucionales. El chat oficial utiliza esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
+Ordina-engine funciona como una capa técnica para facilitar la consulta de información jurídica pública disponible en sitios institucionales. El chat oficial utiliza esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
 
 Toda verificación jurídica debe realizarse directamente en los portales institucionales correspondientes.
 
@@ -47,7 +47,7 @@ Las fuentes jurídicas públicas existen, pero:
 - algunas respuestas son inconsistentes;
 - la integración técnica suele ser compleja.
 
-Ordina-api unifica esos servicios bajo un esquema más estable y fácil de integrar en:
+Ordina-engine unifica esos servicios bajo un esquema más estable y fácil de integrar en:
 
 - asistentes de IA,
 - herramientas legales,
@@ -81,7 +81,7 @@ Respuesta esperada:
 ```json
 {
   "status": "ok",
-  "service": "Ordina-api"
+  "service": "Ordina-engine"
 }
 ```
 

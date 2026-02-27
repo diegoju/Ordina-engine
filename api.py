@@ -546,14 +546,14 @@ def jurislex_detalle_articulo(
 def read_root():
     return {
         "mensaje": "API de Ordina funcionando correctamente",
-        "servicio": "Ordina-api",
+        "servicio": "Ordina-engine",
         "status": "ok",
     }
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "Ordina-api"}
+    return {"status": "ok", "service": "Ordina-engine"}
 
 
 @app.get("/health/deep")
@@ -628,7 +628,7 @@ def deep_health_check():
         status_code=status_code,
         content={
             "status": status_text,
-            "service": "Ordina-api",
+            "service": "Ordina-engine",
             "checks": checks,
         },
     )
