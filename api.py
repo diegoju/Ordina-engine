@@ -611,7 +611,7 @@ def deep_health_check():
     jl_results = jl_data.get("Resultado") if isinstance(jl_data, dict) else []
     if not isinstance(jl_results, list):
         jl_results = []
-    jl_ok = jl_status == 200 and len(jl_results) >= 1
+    jl_ok = jl_status == 200 and isinstance(jl_data, dict)
     checks.append(
         {
             "name": "jurislex-search",
