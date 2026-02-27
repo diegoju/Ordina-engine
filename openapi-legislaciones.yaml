@@ -5,7 +5,7 @@ info:
   description: Esquema id-legislaciones para obtener IdLegislacion y categoria antes de consultar Jurislex.
 
 servers:
-  - url: https://legislaciones-api.vercel.app
+  - url: https://lexia-api.vercel.app
 
 paths:
   /health:
