@@ -25,6 +25,16 @@ paths:
                   service:
                     type: string
 
+  /health/deep:
+    get:
+      operationId: deepHealthLexIA
+      summary: Estado profundo del servicio y dependencias
+      responses:
+        "200":
+          description: Todas las dependencias operando
+        "503":
+          description: Alguna dependencia degradada
+
   /ley:
     get:
       operationId: buscarLey

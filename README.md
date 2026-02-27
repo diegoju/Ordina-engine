@@ -67,6 +67,7 @@ La mayoría de consultas siguen este orden:
 ### 1️⃣ Estado del servicio
 
 - `GET /health`
+- `GET /health/deep` (valida catálogo + SJF + Jurislex)
 
 Respuesta esperada:
 
@@ -76,6 +77,8 @@ Respuesta esperada:
   "service": "LexIA-api"
 }
 ```
+
+`/health/deep` devuelve `ok` o `degraded` según el estado de dependencias externas.
 
 ### 2️⃣ Catálogo de leyes
 
