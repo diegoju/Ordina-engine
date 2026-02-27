@@ -1,5 +1,9 @@
 # Ordina-engine
 
+<p align="center">
+  <img src="assets/ordina-logo.png" alt="Ordina logo" width="260" />
+</p>
+
 Ordina-engine es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
 
 Su objetivo es simplificar el acceso técnico a:
