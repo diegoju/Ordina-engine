@@ -1,5 +1,7 @@
 from fastapi import Body, FastAPI, Query
 import json
+import html
+import re
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -20,6 +22,7 @@ with open("IdLegislaciones.json", encoding="utf-8") as f:
     leyes = json.load(f)
 
 SJF_BASE = "https://sjf2.scjn.gob.mx/services/sjftesismicroservice/api/public"
+JURISLEX_BASE = "https://jurislex.scjn.gob.mx/Legislaciones.Datos64/Aplicacion/Legislaciones.svc/web"
 
 
 def _parse_bool(value, default=False):
@@ -91,6 +94,22 @@ def _sjf_headers(content_type=False):
     if content_type:
         headers["Content-Type"] = "application/json"
     cookie = os.getenv("SJF_COOKIE")
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _jurislex_headers(content_type=False):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Origin": "https://jurislex.scjn.gob.mx",
+        "Referer": "https://jurislex.scjn.gob.mx/",
+    }
+    if content_type:
+        headers["Content-Type"] = "application/json;charset=utf-8"
+    cookie = os.getenv("JURISLEX_COOKIE")
     if cookie:
         headers["Cookie"] = cookie
     return headers
@@ -176,6 +195,66 @@ def _to_int(value, fallback):
         return int(value)
     except Exception:
         return fallback
+
+
+def _to_bool(value, fallback=False):
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in ("true", "1", "yes", "si")
+
+
+def _strip_html(value):
+    text = str(value or "")
+    text = html.unescape(text)
+    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    text = text.replace("</p>", "\n\n").replace("<p>", "")
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _jurislex_filter_raw(id_legislacion: int, articulo_numero: Optional[int] = None):
+    if articulo_numero is None:
+        data = {
+            "bool": {
+                "should": [
+                    {"terms": {"ordenamiento.idOrdenamiento": [int(id_legislacion)]}}
+                ]
+            }
+        }
+    else:
+        data = {
+            "bool": {
+                "should": [
+                    {
+                        "bool": {
+                            "must": [
+                                {"term": {"ordenamiento.idOrdenamiento": int(id_legislacion)}},
+                                {"terms": {"articulos": [int(articulo_numero)]}},
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _normalize_jurislex_result(item, include_raw=False):
+    normalized = {
+        "idArticulo": item.get("iId"),
+        "idLegislacion": item.get("iIdLey"),
+        "numeroArticulo": item.get("iNumArt"),
+        "tipo": item.get("iTipo"),
+        "ley": item.get("sDescLey") or "",
+        "texto": item.get("sDesc") or "",
+        "textoPlano": _strip_html(item.get("sDesc") or ""),
+    }
+    if include_raw:
+        normalized["raw"] = item
+    return normalized
 
 
 @app.get("/sjf/search")
@@ -307,6 +386,156 @@ def sjf_detail(
     }
     if includeRaw:
         response["raw"] = data
+    return response
+
+
+@app.get("/jurislex/decretos")
+def jurislex_decretos(
+    idLegislacion: int = Query(...),
+    idOrdenamiento: Optional[int] = Query(default=None),
+):
+    ordenamiento = idOrdenamiento if idOrdenamiento is not None else idLegislacion
+    url = (
+        f"{JURISLEX_BASE}/decrees/{ordenamiento}?"
+        f"idLegis={idLegislacion}&idOrdenamiento={ordenamiento}"
+    )
+    status, data = _http_json(url, method="GET", headers=_jurislex_headers(content_type=False))
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "Jurislex decrees request failed", "status": status, "upstream": data},
+        )
+    return {"count": len(data) if isinstance(data, list) else 0, "items": data}
+
+
+@app.get("/jurislex/articulos/buscar")
+def jurislex_buscar_articulos(
+    categoria: int = Query(..., description="Categoria Jurislex"),
+    idLegislacion: int = Query(..., description="IdLegislacion validado"),
+    desc: str = Query(default="", description="Numero de articulo o palabra"),
+    soloArticulo: bool = Query(default=False),
+    indice: int = Query(default=0, ge=0),
+    elementos: int = Query(default=20, ge=1, le=50),
+    articuloNumero: Optional[int] = Query(default=None, description="Numero base para filtro exacto"),
+    includeRaw: bool = Query(default=False),
+):
+    payload = {
+        "datosArticulo": {
+            "Indice": indice,
+            "Elementos": elementos,
+            "Ordenamiento": "A desc",
+            "IdLegislacion": [int(idLegislacion)],
+            "SoloArticulo": _to_bool(soloArticulo, False),
+            "Desc": str(desc or ""),
+            "SoloIndices": False,
+            "filterRaw": _jurislex_filter_raw(int(idLegislacion), articuloNumero),
+            "BusquedaGeneralArticulo": None,
+            "bClipboard": False,
+        }
+    }
+
+    url = f"{JURISLEX_BASE}/ObtenerArticulos/{categoria}"
+    status, data = _http_json(url, method="POST", body=payload, headers=_jurislex_headers(content_type=True))
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "Jurislex buscar articulos failed", "status": status, "upstream": data},
+        )
+
+    resultado = data.get("Resultado") if isinstance(data, dict) else []
+    if not isinstance(resultado, list):
+        resultado = []
+    items = [_normalize_jurislex_result(item, include_raw=includeRaw) for item in resultado]
+
+    return {
+        "categoria": categoria,
+        "idLegislacion": idLegislacion,
+        "indice": indice,
+        "elementos": elementos,
+        "count": len(items),
+        "total": _to_int(data.get("Total") if isinstance(data, dict) else None, len(items)),
+        "totalArticulos": _to_int(
+            data.get("TotalArticulos") if isinstance(data, dict) else None, len(items)
+        ),
+        "items": items,
+    }
+
+
+@app.post("/jurislex/articulos/buscar")
+def jurislex_buscar_articulos_post(payload: dict = Body(default={})):
+    categoria = _to_int(payload.get("categoria"), None)
+    datos = payload.get("datosArticulo") if isinstance(payload, dict) else None
+    if categoria is None or not isinstance(datos, dict):
+        return JSONResponse(status_code=400, content={"error": "categoria and datosArticulo are required"})
+
+    datos_articulo = {
+        "Indice": _to_int(datos.get("Indice"), 0),
+        "Elementos": _to_int(datos.get("Elementos"), 20),
+        "Ordenamiento": "A desc",
+        "IdLegislacion": datos.get("IdLegislacion") if isinstance(datos.get("IdLegislacion"), list) else [],
+        "SoloArticulo": _to_bool(datos.get("SoloArticulo"), False),
+        "Desc": str(datos.get("Desc") or ""),
+        "SoloIndices": _to_bool(datos.get("SoloIndices"), False),
+        "filterRaw": str(datos.get("filterRaw") or ""),
+        "BusquedaGeneralArticulo": datos.get("BusquedaGeneralArticulo"),
+        "bClipboard": _to_bool(datos.get("bClipboard"), False),
+    }
+
+    req_body = {"datosArticulo": datos_articulo}
+    url = f"{JURISLEX_BASE}/ObtenerArticulos/{categoria}"
+    status, data = _http_json(url, method="POST", body=req_body, headers=_jurislex_headers(content_type=True))
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "Jurislex buscar articulos failed", "status": status, "upstream": data},
+        )
+
+    resultado = data.get("Resultado") if isinstance(data, dict) else []
+    if not isinstance(resultado, list):
+        resultado = []
+    include_raw = _to_bool(payload.get("includeRaw"), False)
+    items = [_normalize_jurislex_result(item, include_raw=include_raw) for item in resultado]
+
+    return {
+        "categoria": categoria,
+        "count": len(items),
+        "total": _to_int(data.get("Total") if isinstance(data, dict) else None, len(items)),
+        "totalArticulos": _to_int(
+            data.get("TotalArticulos") if isinstance(data, dict) else None, len(items)
+        ),
+        "items": items,
+    }
+
+
+@app.get("/jurislex/articulos/detalle")
+def jurislex_detalle_articulo(
+    categoria: int = Query(...),
+    idLegislacion: int = Query(...),
+    idArticulo: int = Query(...),
+    includeRaw: bool = Query(default=False),
+):
+    payload = {"datosArticulo": {"IdLegislacion": int(idLegislacion), "IdArticulo": int(idArticulo)}}
+    url = f"{JURISLEX_BASE}/ObtenerDetalleArticulos/{categoria}"
+    status, data = _http_json(url, method="POST", body=payload, headers=_jurislex_headers(content_type=True))
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "Jurislex detalle articulo failed", "status": status, "upstream": data},
+        )
+
+    detail = data if isinstance(data, dict) else {}
+    response = {
+        "categoria": categoria,
+        "idLegislacion": detail.get("iIdLey") or idLegislacion,
+        "idArticulo": detail.get("iIdArticulo") or idArticulo,
+        "ley": detail.get("sLey") or "",
+        "titulo": detail.get("sTitulo") or "",
+        "capitulo": detail.get("sCapitulo") or "",
+        "texto": detail.get("sDescArticulo") or "",
+        "textoPlano": _strip_html(detail.get("sDescArticulo") or ""),
+    }
+    if includeRaw:
+        response["raw"] = detail
     return response
 
 @app.get("/")

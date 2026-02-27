@@ -1,0 +1,290 @@
+openapi: 3.1.0
+info:
+  title: LexIA Jurislex API
+  version: 1.0.0
+  description: Endpoints de legislaciones y articulos Jurislex normalizados para GPT.
+
+servers:
+  - url: https://legislaciones-api.vercel.app
+
+paths:
+  /health:
+    get:
+      operationId: healthLexIA
+      summary: Estado del servicio
+      responses:
+        "200":
+          description: Servicio disponible
+
+  /ley:
+    get:
+      operationId: buscarLey
+      summary: Buscar leyes por id categoria o nombre
+      parameters:
+        - name: id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: nombre
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de leyes encontradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    categoria:
+                      type: integer
+                    nombre:
+                      type: string
+
+  /jurislex/decretos:
+    get:
+      operationId: obtenerDecretosJurislex
+      summary: Obtener anexos/decretos de una legislacion
+      parameters:
+        - name: idLegislacion
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: idOrdenamiento
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de decretos o anexos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties: {}
+
+  /jurislex/articulos/buscar:
+    get:
+      operationId: buscarArticulosJurislex
+      summary: Buscar articulos en Jurislex
+      parameters:
+        - name: categoria
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: idLegislacion
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: desc
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ""
+        - name: soloArticulo
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: indice
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: elementos
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: articuloNumero
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado paginado normalizado de articulos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurislexSearchResponse"
+
+    post:
+      operationId: buscarArticulosJurislexAvanzado
+      summary: Buscar articulos con payload avanzado Jurislex
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                categoria:
+                  type: integer
+                includeRaw:
+                  type: boolean
+                datosArticulo:
+                  type: object
+                  properties:
+                    IdLegislacion:
+                      type: array
+                      items:
+                        type: integer
+                    Desc:
+                      type: string
+                    Indice:
+                      type: integer
+                    Elementos:
+                      type: integer
+                    Ordenamiento:
+                      type: string
+                    SoloArticulo:
+                      type: boolean
+                    SoloIndices:
+                      type: boolean
+                    filterRaw:
+                      type: string
+      responses:
+        "200":
+          description: Resultado paginado normalizado de articulos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurislexSearchResponse"
+
+  /jurislex/articulos/detalle:
+    get:
+      operationId: obtenerDetalleArticuloJurislex
+      summary: Obtener texto completo de un articulo en Jurislex
+      parameters:
+        - name: categoria
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: idLegislacion
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: idArticulo
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Detalle normalizado de articulo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurislexDetailResponse"
+
+components:
+  schemas:
+    JurislexItem:
+      type: object
+      properties:
+        idArticulo:
+          type: integer
+        idLegislacion:
+          type: integer
+        numeroArticulo:
+          type: integer
+        tipo:
+          type: integer
+        ley:
+          type: string
+        texto:
+          type: string
+        textoPlano:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    JurislexSearchResponse:
+      type: object
+      properties:
+        categoria:
+          type: integer
+        idLegislacion:
+          type: integer
+        indice:
+          type: integer
+        elementos:
+          type: integer
+        count:
+          type: integer
+        total:
+          type: integer
+        totalArticulos:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JurislexItem"
+
+    JurislexDetailResponse:
+      type: object
+      properties:
+        categoria:
+          type: integer
+        idLegislacion:
+          type: integer
+        idArticulo:
+          type: integer
+        ley:
+          type: string
+        titulo:
+          type: string
+        capitulo:
+          type: string
+        texto:
+          type: string
+        textoPlano:
+          type: string
+        raw:
+          type: object
+          properties: {}

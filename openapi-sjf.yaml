@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: LexIA API
-  version: 2.0.0
-  description: API unificada para legislaciones y jurisprudencia (SJF) normalizada para GPT.
+  title: LexIA SJF API
+  version: 1.0.0
+  description: Endpoints de jurisprudencia SJF normalizados para GPT.
 
 servers:
   - url: https://legislaciones-api.vercel.app
@@ -24,52 +24,11 @@ paths:
                     type: string
                   service:
                     type: string
-                required:
-                  - status
-                  - service
-
-  /ley:
-    get:
-      operationId: buscarLey
-      summary: Buscar leyes por id categoria o nombre
-      parameters:
-        - name: id
-          in: query
-          required: false
-          schema:
-            type: integer
-        - name: categoria
-          in: query
-          required: false
-          schema:
-            type: integer
-        - name: nombre
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista de leyes encontradas
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    categoria:
-                      type: integer
-                    nombre:
-                      type: string
 
   /jurisprudencia/buscar:
     get:
       operationId: buscarJurisprudencia
       summary: Buscar jurisprudencia SJF por termino simple
-      description: Si no se envia q devuelve resultados generales con filtros por defecto.
       parameters:
         - name: q
           in: query
@@ -105,23 +64,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JurisprudenciaSearchResponse"
-        "400":
-          description: Parametros invalidos
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Error de conexion con SJF
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
     post:
       operationId: buscarJurisprudenciaAvanzada
       summary: Buscar jurisprudencia SJF con payload avanzado
-      description: Envia el body completo del formato de busqueda SJF.
       parameters:
         - name: page
           in: query
@@ -161,20 +107,6 @@ paths:
                   items:
                     type: object
                     properties: {}
-                bFacet:
-                  type: boolean
-                ius:
-                  type: array
-                  items:
-                    type: integer
-                idApp:
-                  type: string
-                lbSearch:
-                  type: array
-                  items:
-                    type: string
-                filterExpression:
-                  type: string
       responses:
         "200":
           description: Resultado paginado normalizado
@@ -182,31 +114,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JurisprudenciaSearchResponse"
-        "400":
-          description: Parametros invalidos
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Error de conexion con SJF
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /jurisprudencia/detalle:
     get:
       operationId: obtenerDetalleJurisprudencia
       summary: Obtener detalle de tesis por IUS
-      description: Si no se envia isSemanal el proxy prueba true y luego false.
       parameters:
         - name: ius
           in: query
           required: true
           schema:
             type: integer
-          example: 2031780
         - name: isSemanal
           in: query
           required: false
@@ -231,18 +149,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JurisprudenciaDetailResponse"
-        "400":
-          description: Parametros invalidos
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Error de conexion con SJF
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -290,14 +196,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/JurisprudenciaItem"
-      required:
-        - total
-        - totalPages
-        - page
-        - size
-        - count
-        - hasMore
-        - items
 
     JurisprudenciaDetailResponse:
       type: object
@@ -321,17 +219,3 @@ components:
         raw:
           type: object
           properties: {}
-      required:
-        - ius
-        - isSemanalUsed
-        - hostName
-        - rubro
-        - texto
-
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-      required:
-        - error
