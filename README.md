@@ -1,0 +1,152 @@
+# LexIA-api
+
+LexIA-api es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
+
+Su objetivo es simplificar el acceso técnico a:
+
+- Leyes y catálogos normativos.
+- Jurisprudencia del Semanario Judicial de la Federación (SJF).
+- Artículos legales consultados vía Jurislex.
+
+No sustituye a las fuentes oficiales.
+Solo actúa como una capa técnica más simple y consistente.
+
+## 🚀 Uso rápido (30 segundos)
+
+Si solo quieres probarlo:
+
+GPT oficial:
+
+➡️ https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
+
+Base URL de la API:
+
+`https://lexia-api.vercel.app`
+
+## 📌 ¿Qué problema resuelve?
+
+Las fuentes jurídicas públicas existen, pero:
+
+- sus interfaces pueden cambiar;
+- algunas respuestas son inconsistentes;
+- la integración técnica suele ser compleja.
+
+LexIA-api unifica esos servicios bajo un esquema más estable y fácil de integrar en:
+
+- asistentes de IA,
+- herramientas legales,
+- scripts de automatización,
+- sistemas de búsqueda.
+
+## 🧭 Flujo básico (cómo se usa realmente)
+
+La mayoría de consultas siguen este orden:
+
+1. Buscar una ley -> obtener `idLegislacion` y `categoria`.
+2. Buscar jurisprudencia por término (opcional).
+3. Consultar artículos usando esos identificadores.
+
+## 📡 Endpoints principales
+
+### 1️⃣ Estado del servicio
+
+- `GET /health`
+
+Respuesta esperada:
+
+```json
+{
+  "status": "ok",
+  "service": "LexIA-api"
+}
+```
+
+### 2️⃣ Catálogo de leyes
+
+Permite localizar la ley y obtener sus identificadores.
+
+- `GET /ley?id=<int>`
+- `GET /ley?categoria=<int>`
+- `GET /ley?nombre=<texto>`
+
+Ejemplo:
+
+```bash
+curl --get "https://lexia-api.vercel.app/ley" \
+  --data-urlencode "nombre=constitución"
+```
+
+### 3️⃣ Jurisprudencia (SJF)
+
+Buscar:
+
+- `GET /jurisprudencia/buscar?q=<termino>&page=0&size=10`
+- `POST /jurisprudencia/buscar`
+
+Detalle:
+
+- `GET /jurisprudencia/detalle?ius=<numero>`
+
+Ejemplo:
+
+```bash
+curl --get "https://lexia-api.vercel.app/jurisprudencia/buscar" \
+  --data-urlencode "q=amparo" \
+  --data-urlencode "page=0" \
+  --data-urlencode "size=3"
+```
+
+### 4️⃣ Artículos legales (Jurislex)
+
+Buscar artículos:
+
+- `GET /jurislex/articulos/buscar`
+- `POST /jurislex/articulos/buscar`
+
+Detalle:
+
+- `GET /jurislex/articulos/detalle`
+
+Ejemplo:
+
+```bash
+curl --get "https://lexia-api.vercel.app/jurislex/articulos/buscar" \
+  --data-urlencode "categoria=1000" \
+  --data-urlencode "idLegislacion=1000" \
+  --data-urlencode "soloArticulo=true"
+```
+
+## 📂 Esquemas OpenAPI incluidos
+
+Selecciona según lo que necesites:
+
+- `openapi-lexia-hub.yaml` -> todo en uno (recomendado).
+- `openapi-sjf.yaml` -> solo jurisprudencia.
+- `openapi-jurislex.yaml` -> artículos + leyes.
+- `openapi-legislaciones.yaml` -> solo catálogo de leyes.
+
+## 🧠 Crear tu propio GPT o agente
+
+### Opción rápida
+
+Usar el GPT existente:
+
+https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
+
+### Opción personalizada (Actions)
+
+1. Elige un archivo OpenAPI.
+2. Ve a Actions en tu GPT.
+3. Pega el YAML.
+4. Verifica base URL:
+   - `https://lexia-api.vercel.app`
+5. Prueba:
+   - `GET /health`
+   - `GET /ley?nombre=constitución`
+
+## ⚙️ Variables opcionales
+
+Solo necesarias si alguna fuente bloquea solicitudes:
+
+- `SJF_COOKIE`
+- `JURISLEX_COOKIE`
