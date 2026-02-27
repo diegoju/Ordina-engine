@@ -8,8 +8,22 @@ Su objetivo es simplificar el acceso técnico a:
 - Jurisprudencia del Semanario Judicial de la Federación (SJF).
 - Artículos legales consultados vía Jurislex.
 
-LexIA **no sustituye a las fuentes oficiales.**
-Solo actúa como una capa técnica más simple y consistente.
+## Disclaimer
+
+LexIA-api es un proyecto independiente y no oficial.
+
+Este repositorio únicamente facilita el acceso técnico a información jurídica pública disponible en sitios institucionales. No sustituye, modifica ni altera las fuentes oficiales, y toda verificación jurídica debe realizarse directamente en los portales correspondientes.
+
+El proyecto:
+
+- No está afiliado, patrocinado ni autorizado por ninguna institución pública.
+- No busca replicar ni reemplazar servicios oficiales.
+- No elude mecanismos de seguridad ni autenticación.
+- Solo consume información públicamente accesible.
+
+El uso de esta API debe realizarse de forma responsable y respetando los términos de uso y políticas de las fuentes originales.
+
+Los usuarios son responsables del uso que den a la información consultada mediante este proyecto.
 
 ## 🚀 Uso rápido (30 segundos)
 
