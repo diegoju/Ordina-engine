@@ -1,0 +1,25 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run smoke tests
+        env:
+          LEXIA_BASE_URL: https://lexia-api.vercel.app
+        run: |
+          python smoke_test.py
