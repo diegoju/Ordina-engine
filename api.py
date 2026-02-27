@@ -545,15 +545,15 @@ def jurislex_detalle_articulo(
 @app.get("/")
 def read_root():
     return {
-        "mensaje": "API de LexIA funcionando correctamente",
-        "servicio": "LexIA-api",
+        "mensaje": "API de Ordina funcionando correctamente",
+        "servicio": "Ordina-api",
         "status": "ok",
     }
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "LexIA-api"}
+    return {"status": "ok", "service": "Ordina-api"}
 
 
 @app.get("/health/deep")
@@ -628,7 +628,7 @@ def deep_health_check():
         status_code=status_code,
         content={
             "status": status_text,
-            "service": "LexIA-api",
+            "service": "Ordina-api",
             "checks": checks,
         },
     )

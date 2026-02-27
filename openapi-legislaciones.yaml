@@ -1,16 +1,16 @@
 openapi: 3.1.0
 info:
-  title: LexIA Legislaciones API
+  title: Ordina Legislaciones API
   version: 1.0.0
   description: Esquema id-legislaciones para obtener IdLegislacion y categoria antes de consultar Jurislex.
 
 servers:
-  - url: https://lexia-api.vercel.app
+  - url: https://ordina-api.vercel.app
 
 paths:
   /health:
     get:
-      operationId: healthLexIA
+      operationId: healthOrdina
       summary: Estado del servicio
       responses:
         "200":
@@ -27,7 +27,7 @@ paths:
 
   /health/deep:
     get:
-      operationId: deepHealthLexIA
+      operationId: deepHealthOrdina
       summary: Estado profundo del servicio y dependencias
       responses:
         "200":

@@ -1,6 +1,6 @@
-# LexIA-api
+# Ordina-api
 
-LexIA-api es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
+Ordina-api es una API que facilita la consulta de información jurídica pública mexicana desde un solo punto.
 
 Su objetivo es simplificar el acceso técnico a:
 
@@ -10,9 +10,9 @@ Su objetivo es simplificar el acceso técnico a:
 
 ## ⚠️ Disclaimer
 
-LexIA-api y el chat oficial de LexIA son proyectos independientes y no oficiales.
+Ordina-api y el chat oficial de Ordina son proyectos independientes y no oficiales.
 
-LexIA-api funciona como una capa técnica para facilitar la consulta de información jurídica pública disponible en sitios institucionales. El chat oficial utiliza esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
+Ordina-api funciona como una capa técnica para facilitar la consulta de información jurídica pública disponible en sitios institucionales. El chat oficial utiliza esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
 
 Toda verificación jurídica debe realizarse directamente en los portales institucionales correspondientes.
 
@@ -33,11 +33,11 @@ Si solo quieres probarlo:
 
 GPT oficial:
 
-➡️ https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
+➡️ Próximamente enlace oficial de Ordina
 
 Base URL de la API:
 
-`https://lexia-api.vercel.app`
+`https://ordina-api.vercel.app`
 
 ## 📌 ¿Qué problema resuelve?
 
@@ -47,7 +47,7 @@ Las fuentes jurídicas públicas existen, pero:
 - algunas respuestas son inconsistentes;
 - la integración técnica suele ser compleja.
 
-LexIA-api unifica esos servicios bajo un esquema más estable y fácil de integrar en:
+Ordina-api unifica esos servicios bajo un esquema más estable y fácil de integrar en:
 
 - asistentes de IA,
 - herramientas legales,
@@ -81,7 +81,7 @@ Respuesta esperada:
 ```json
 {
   "status": "ok",
-  "service": "LexIA-api"
+  "service": "Ordina-api"
 }
 ```
 
@@ -98,7 +98,7 @@ Permite localizar la ley y obtener sus identificadores.
 Ejemplo:
 
 ```bash
-curl --get "https://lexia-api.vercel.app/ley" \
+curl --get "https://ordina-api.vercel.app/ley" \
   --data-urlencode "nombre=constitución"
 ```
 
@@ -116,7 +116,7 @@ Detalle:
 Ejemplo:
 
 ```bash
-curl --get "https://lexia-api.vercel.app/jurisprudencia/buscar" \
+curl --get "https://ordina-api.vercel.app/jurisprudencia/buscar" \
   --data-urlencode "q=amparo" \
   --data-urlencode "page=0" \
   --data-urlencode "size=3"
@@ -136,7 +136,7 @@ Detalle:
 Ejemplo:
 
 ```bash
-curl --get "https://lexia-api.vercel.app/jurislex/articulos/buscar" \
+curl --get "https://ordina-api.vercel.app/jurislex/articulos/buscar" \
   --data-urlencode "categoria=1000" \
   --data-urlencode "idLegislacion=1000" \
   --data-urlencode "soloArticulo=true"
@@ -146,7 +146,7 @@ curl --get "https://lexia-api.vercel.app/jurislex/articulos/buscar" \
 
 Selecciona según lo que necesites:
 
-- `openapi-lexia-hub.yaml` -> todo en uno (recomendado).
+- `openapi-ordina-hub.yaml` -> todo en uno (recomendado).
 - `openapi-sjf.yaml` -> solo jurisprudencia.
 - `openapi-jurislex.yaml` -> artículos + leyes.
 - `openapi-legislaciones.yaml` -> solo catálogo de leyes.
@@ -157,7 +157,7 @@ Selecciona según lo que necesites:
 
 Usar el GPT existente:
 
-https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
+Próximamente enlace oficial de Ordina.
 
 ### Opción personalizada (Actions)
 
@@ -165,7 +165,7 @@ https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
 2. Ve a Actions en tu GPT.
 3. Pega el YAML.
 4. Verifica base URL:
-   - `https://lexia-api.vercel.app`
+   - `https://ordina-api.vercel.app`
 5. Prueba:
    - `GET /health`
    - `GET /ley?nombre=constitución`
@@ -176,7 +176,7 @@ Para obtener mejores resultados, utiliza las instrucciones base incluidas en est
 
 1. Abre el archivo:
 
-   `LexIA-instrucciones-minimas.md`
+   `Ordina-instrucciones-minimas.md`
 
 2. Copia su contenido completo.
 

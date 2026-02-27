@@ -20,6 +20,6 @@ jobs:
 
       - name: Run smoke tests
         env:
-          LEXIA_BASE_URL: https://lexia-api.vercel.app
+          ORDINA_BASE_URL: https://ordina-api.vercel.app
         run: |
           python smoke_test.py
