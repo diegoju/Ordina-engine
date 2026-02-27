@@ -8,8 +8,6 @@ Su objetivo es simplificar el acceso técnico a:
 - Jurisprudencia del Semanario Judicial de la Federación (SJF).
 - Artículos legales consultados vía Jurislex.
 
-## Disclaimer
-
 ## ⚠️ Disclaimer
 
 LexIA-api y el chat oficial de LexIA son proyectos independientes y no oficiales.
@@ -161,6 +159,27 @@ https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-lexia
 5. Prueba:
    - `GET /health`
    - `GET /ley?nombre=constitución`
+
+## Instrucciones del chat (recomendado)
+
+Para obtener mejores resultados, utiliza las instrucciones base incluidas en este repositorio.
+
+1. Abre el archivo:
+
+   `LexIA-instrucciones-minimas.md`
+
+2. Copia su contenido completo.
+
+3. Pégalo en la sección **Instructions** (o **System Instructions**) de tu chat o GPT personalizado.
+
+Estas instrucciones definen:
+
+- el flujo correcto de consulta entre endpoints,
+- cómo resolver leyes -> artículos,
+- cómo buscar y explicar jurisprudencia,
+- y el comportamiento esperado del asistente al usar la API.
+
+Sin estas instrucciones, el chat puede realizar consultas incompletas o usar los endpoints de forma incorrecta.
 
 ## ⚙️ Variables opcionales
 

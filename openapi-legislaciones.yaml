@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: LexIA Legislaciones API
   version: 1.0.0
-  description: Esquema dedicado para obtener IdLegislacion y categoria por id o nombre.
+  description: Esquema id-legislaciones para obtener IdLegislacion y categoria antes de consultar Jurislex.
 
 servers:
   - url: https://legislaciones-api.vercel.app
@@ -29,7 +29,7 @@ paths:
     get:
       operationId: buscarLey
       summary: Buscar leyes por id categoria o nombre
-      description: Permite obtener el identificador de la legislacion y su categoria.
+      description: Permite obtener IdLegislacion y categoria de leyes para usarlos en consultas de Jurislex.
       parameters:
         - name: id
           in: query
