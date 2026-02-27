@@ -8,7 +8,7 @@ Su objetivo es simplificar el acceso técnico a:
 - Jurisprudencia del Semanario Judicial de la Federación (SJF).
 - Artículos legales consultados vía Jurislex.
 
-No sustituye a las fuentes oficiales.
+LexIA **no sustituye a las fuentes oficiales.**
 Solo actúa como una capa técnica más simple y consistente.
 
 ## 🚀 Uso rápido (30 segundos)
