@@ -311,7 +311,16 @@ def sjf_detail(
 
 @app.get("/")
 def read_root():
-    return {"mensaje": "API de Legislaciones funcionando en Vercel"}
+    return {
+        "mensaje": "API de LexIA funcionando correctamente",
+        "servicio": "LexIA-api",
+        "status": "ok",
+    }
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "LexIA-api"}
 
 @app.get("/ley")
 def buscar_ley(id: Optional[int] = None, categoria: Optional[int] = None, nombre: Optional[str] = None):
