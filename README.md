@@ -10,20 +10,24 @@ Su objetivo es simplificar el acceso técnico a:
 
 ## Disclaimer
 
-LexIA-api es un proyecto independiente y no oficial.
+## ⚠️ Disclaimer
 
-Este repositorio únicamente facilita el acceso técnico a información jurídica pública disponible en sitios institucionales. No sustituye, modifica ni altera las fuentes oficiales, y toda verificación jurídica debe realizarse directamente en los portales correspondientes.
+LexIA-api y el chat oficial de LexIA son proyectos independientes y no oficiales.
 
-El proyecto:
+LexIA-api funciona como una capa técnica para facilitar la consulta de información jurídica pública disponible en sitios institucionales. El chat oficial utiliza esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
+
+Toda verificación jurídica debe realizarse directamente en los portales institucionales correspondientes.
+
+Este proyecto:
 
 - No está afiliado, patrocinado ni autorizado por ninguna institución pública.
 - No busca replicar ni reemplazar servicios oficiales.
 - No elude mecanismos de seguridad ni autenticación.
 - Solo consume información públicamente accesible.
 
-El uso de esta API debe realizarse de forma responsable y respetando los términos de uso y políticas de las fuentes originales.
+El uso de la API y del chat debe realizarse de forma responsable y respetando los términos de uso de las fuentes originales.
 
-Los usuarios son responsables del uso que den a la información consultada mediante este proyecto.
+Los usuarios son responsables del uso e interpretación de la información consultada mediante este proyecto.
 
 ## 🚀 Uso rápido (30 segundos)
 
