@@ -551,6 +551,84 @@ def read_root():
 def health_check():
     return {"status": "ok", "service": "LexIA-api"}
 
+
+@app.get("/health/deep")
+def deep_health_check():
+    checks = []
+
+    catalog_ok = isinstance(leyes, list) and len(leyes) > 0
+    checks.append(
+        {
+            "name": "catalogo-legislaciones",
+            "ok": catalog_ok,
+            "detail": {"count": len(leyes) if isinstance(leyes, list) else 0},
+        }
+    )
+
+    sjf_payload = _default_sjf_payload("amparo")
+    sjf_url = f"{SJF_BASE}/tesis?page=0&size=1"
+    sjf_status, sjf_data = _http_json(
+        sjf_url,
+        method="POST",
+        body=sjf_payload,
+        headers=_sjf_headers(content_type=True),
+    )
+    sjf_docs = _extract_docs(sjf_data)
+    sjf_ok = sjf_status == 200 and len(sjf_docs) >= 1
+    checks.append(
+        {
+            "name": "sjf-search",
+            "ok": sjf_ok,
+            "detail": {"status": sjf_status, "count": len(sjf_docs)},
+        }
+    )
+
+    jurislex_payload = {
+        "datosArticulo": {
+            "Indice": 0,
+            "Elementos": 1,
+            "Ordenamiento": "A desc",
+            "IdLegislacion": [1000],
+            "SoloArticulo": True,
+            "Desc": "1",
+            "SoloIndices": False,
+            "filterRaw": _jurislex_filter_raw(1000, 1),
+            "BusquedaGeneralArticulo": None,
+            "bClipboard": False,
+        }
+    }
+    jurislex_url = f"{JURISLEX_BASE}/ObtenerArticulos/1000"
+    jl_status, jl_data = _http_json(
+        jurislex_url,
+        method="POST",
+        body=jurislex_payload,
+        headers=_jurislex_headers(content_type=True),
+    )
+    jl_results = jl_data.get("Resultado") if isinstance(jl_data, dict) else []
+    if not isinstance(jl_results, list):
+        jl_results = []
+    jl_ok = jl_status == 200 and len(jl_results) >= 1
+    checks.append(
+        {
+            "name": "jurislex-search",
+            "ok": jl_ok,
+            "detail": {"status": jl_status, "count": len(jl_results)},
+        }
+    )
+
+    overall_ok = all(check.get("ok") for check in checks)
+    status_text = "ok" if overall_ok else "degraded"
+    status_code = 200 if overall_ok else 503
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_text,
+            "service": "LexIA-api",
+            "checks": checks,
+        },
+    )
+
 @app.get("/ley")
 def buscar_ley(id: Optional[int] = None, categoria: Optional[int] = None, nombre: Optional[str] = None):
     resultados = leyes

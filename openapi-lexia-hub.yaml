@@ -28,6 +28,24 @@ paths:
                   - status
                   - service
 
+  /health/deep:
+    get:
+      operationId: deepHealthLexIA
+      summary: Estado profundo del servicio y dependencias
+      responses:
+        "200":
+          description: Todas las dependencias operando
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeepHealthResponse"
+        "503":
+          description: Alguna dependencia degradada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeepHealthResponse"
+
   /ley:
     get:
       operationId: buscarLey
@@ -546,6 +564,30 @@ components:
           type: string
       required:
         - error
+
+    DeepHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        checks:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              ok:
+                type: boolean
+              detail:
+                type: object
+                properties: {}
+      required:
+        - status
+        - service
+        - checks
 
     JurislexItem:
       type: object
