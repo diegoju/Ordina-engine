@@ -5,7 +5,7 @@ import sys
 from urllib import error, parse, request
 
 
-BASE_URL = os.getenv("ORDINA_BASE_URL", os.getenv("LEXIA_BASE_URL", "https://ordina-api.vercel.app")).rstrip("/")
+BASE_URL = os.getenv("ORDINA_BASE_URL", os.getenv("LEXIA_BASE_URL", "https://ordina-engine.vercel.app")).rstrip("/")
 TIMEOUT = 25
 
 

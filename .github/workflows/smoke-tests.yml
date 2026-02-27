@@ -20,6 +20,6 @@ jobs:
 
       - name: Run smoke tests
         env:
-          ORDINA_BASE_URL: https://ordina-api.vercel.app
+          ORDINA_BASE_URL: https://ordina-engine.vercel.app
         run: |
           python smoke_test.py

@@ -5,7 +5,7 @@ info:
   description: Endpoints de jurisprudencia SJF normalizados para GPT.
 
 servers:
-  - url: https://ordina-api.vercel.app
+  - url: https://ordina-engine.vercel.app
 
 paths:
   /health:

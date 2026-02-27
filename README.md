@@ -37,7 +37,7 @@ GPT oficial:
 
 Base URL de la API:
 
-`https://ordina-api.vercel.app`
+`https://ordina-engine.vercel.app`
 
 ## 📌 ¿Qué problema resuelve?
 
@@ -98,7 +98,7 @@ Permite localizar la ley y obtener sus identificadores.
 Ejemplo:
 
 ```bash
-curl --get "https://ordina-api.vercel.app/ley" \
+curl --get "https://ordina-engine.vercel.app/ley" \
   --data-urlencode "nombre=constitución"
 ```
 
@@ -116,7 +116,7 @@ Detalle:
 Ejemplo:
 
 ```bash
-curl --get "https://ordina-api.vercel.app/jurisprudencia/buscar" \
+curl --get "https://ordina-engine.vercel.app/jurisprudencia/buscar" \
   --data-urlencode "q=amparo" \
   --data-urlencode "page=0" \
   --data-urlencode "size=3"
@@ -136,7 +136,7 @@ Detalle:
 Ejemplo:
 
 ```bash
-curl --get "https://ordina-api.vercel.app/jurislex/articulos/buscar" \
+curl --get "https://ordina-engine.vercel.app/jurislex/articulos/buscar" \
   --data-urlencode "categoria=1000" \
   --data-urlencode "idLegislacion=1000" \
   --data-urlencode "soloArticulo=true"
@@ -165,7 +165,7 @@ Próximamente enlace oficial de Ordina.
 2. Ve a Actions en tu GPT.
 3. Pega el YAML.
 4. Verifica base URL:
-   - `https://ordina-api.vercel.app`
+   - `https://ordina-engine.vercel.app`
 5. Prueba:
    - `GET /health`
    - `GET /ley?nombre=constitución`
