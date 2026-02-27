@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  title: LexIA Legislaciones API
+  version: 1.0.0
+  description: Esquema dedicado para obtener IdLegislacion y categoria por id o nombre.
+
+servers:
+  - url: https://legislaciones-api.vercel.app
+
+paths:
+  /health:
+    get:
+      operationId: healthLexIA
+      summary: Estado del servicio
+      responses:
+        "200":
+          description: Servicio disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+
+  /ley:
+    get:
+      operationId: buscarLey
+      summary: Buscar leyes por id categoria o nombre
+      description: Permite obtener el identificador de la legislacion y su categoria.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Id exacto de la ley.
+        - name: categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Categoria de la ley.
+        - name: nombre
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Texto para buscar por nombre.
+      responses:
+        "200":
+          description: Lista de leyes encontradas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ley"
+
+components:
+  schemas:
+    Ley:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: IdLegislacion.
+        categoria:
+          type: integer
+          description: Categoria del ordenamiento.
+        nombre:
+          type: string
+          description: Nombre oficial de la ley.
+      required:
+        - id
+        - categoria
+        - nombre
