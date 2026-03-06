@@ -146,6 +146,28 @@ curl --get "https://ordina-engine.vercel.app/jurislex/articulos/buscar" \
   --data-urlencode "soloArticulo=true"
 ```
 
+### 5️⃣ Precedentes y sentencias (Buscador jurídico SCJN)
+
+Buscar precedentes/ejecutorias con respuesta resumida (sin el bloque pesado de embeddings):
+
+- `GET /precedentes/buscar`
+- `POST /precedentes/buscar`
+
+Alias disponible:
+
+- `GET /scjn/precedentes/buscar`
+- `POST /scjn/precedentes/buscar`
+
+Ejemplo:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/precedentes/buscar" \
+  --data-urlencode "q=partido*" \
+  --data-urlencode "indice=ejecutorias" \
+  --data-urlencode "page=1" \
+  --data-urlencode "size=3"
+```
+
 ## 📂 Esquemas OpenAPI incluidos
 
 Selecciona según lo que necesites:
@@ -201,6 +223,39 @@ Solo necesarias si alguna fuente bloquea solicitudes:
 
 - `SJF_COOKIE`
 - `JURISLEX_COOKIE`
+- `BJ_SCJN_COOKIE`
+
+## 🔌 Servidor MCP (Model Context Protocol)
+
+Tambien puedes usar Ordina-engine como servidor MCP por `stdio` para clientes compatibles (Claude Desktop, IDEs, agentes).
+
+### Ejecutar local
+
+```bash
+pip install -r requirements.txt
+python mcp_server.py
+```
+
+### Tools expuestas
+
+- `buscarLey`
+- `buscarJurisprudencia`
+- `obtenerDetalleJurisprudencia`
+- `buscarArticulosJurislex`
+- `obtenerDetalleArticuloJurislex`
+
+### Configuracion ejemplo (cliente MCP)
+
+Comando `python` apuntando a `mcp_server.py` dentro del repo.
+
+Ejemplo de `command` y `args`:
+
+```json
+{
+  "command": "python",
+  "args": ["/ruta/a/tu/repo/mcp_server.py"]
+}
+```
 
 ## ✅ Verificación automática
 

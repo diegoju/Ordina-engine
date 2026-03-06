@@ -10,6 +10,8 @@ from typing import Optional
 
 app = FastAPI()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Permitir cualquier origen (útil para desarrollo/testing)
 app.add_middleware(
     CORSMiddleware,
@@ -18,11 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-with open("IdLegislaciones.json", encoding="utf-8") as f:
+with open(os.path.join(BASE_DIR, "IdLegislaciones.json"), encoding="utf-8") as f:
     leyes = json.load(f)
 
 SJF_BASE = "https://sjf2.scjn.gob.mx/services/sjftesismicroservice/api/public"
 JURISLEX_BASE = "https://jurislex.scjn.gob.mx/Legislaciones.Datos64/Aplicacion/Legislaciones.svc/web"
+BJ_SCJN_BASE = "https://bj.scjn.gob.mx/api/v1/bj"
 
 
 def _parse_bool(value, default=False):
@@ -110,6 +113,22 @@ def _jurislex_headers(content_type=False):
     if content_type:
         headers["Content-Type"] = "application/json;charset=utf-8"
     cookie = os.getenv("JURISLEX_COOKIE")
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _bj_scjn_headers(content_type=False):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Origin": "https://bj.scjn.gob.mx",
+        "Referer": "https://bj.scjn.gob.mx/",
+    }
+    if content_type:
+        headers["Content-Type"] = "application/json"
+    cookie = os.getenv("BJ_SCJN_COOKIE")
     if cookie:
         headers["Cookie"] = cookie
     return headers
@@ -258,6 +277,67 @@ def _normalize_jurislex_result(item, include_raw=False):
     return normalized
 
 
+def _extract_bj_items(data):
+    if not isinstance(data, dict):
+        return []
+    items = data.get("resultados")
+    return items if isinstance(items, list) else []
+
+
+def _extracto_texto(extractos):
+    if isinstance(extractos, dict):
+        texto = extractos.get("Texto")
+        if isinstance(texto, list):
+            chunks = [_strip_html(x) for x in texto if str(x or "").strip()]
+            return " ... ".join(chunks[:3]).strip()
+        if isinstance(texto, str):
+            return _strip_html(texto)
+    if isinstance(extractos, list):
+        chunks = [_strip_html(x) for x in extractos if str(x or "").strip()]
+        return " ... ".join(chunks[:3]).strip()
+    if isinstance(extractos, str):
+        return _strip_html(extractos)
+    return ""
+
+
+def _normalize_bj_item(item, include_raw=False):
+    epoca = item.get("epoca") if isinstance(item.get("epoca"), dict) else {}
+    localizacion = item.get("localizacion") if isinstance(item.get("localizacion"), dict) else {}
+    texto = str(item.get("texto") or "")
+    extracto = _extracto_texto(item.get("extractos"))
+
+    normalized = {
+        "registroDigital": item.get("registroDigital"),
+        "rubro": _strip_html(item.get("rubro") or ""),
+        "tipoEjecutoria": item.get("tipoEjecutoria") or "",
+        "tipoAsunto": item.get("tipoAsunto") or "",
+        "asunto": item.get("asunto") or "",
+        "organoJurisdiccional": item.get("organoJurisdiccional") or "",
+        "instancia": item.get("instancia") or "",
+        "epoca": {
+            "numero": epoca.get("numero") or "",
+            "nombre": epoca.get("nombre") or "",
+        },
+        "tesis": item.get("tesis") or "",
+        "numeroExpediente": item.get("numeroExpediente") or "",
+        "promovente": item.get("promovente") or "",
+        "fuente": item.get("fuente") or "",
+        "volumen": item.get("volumen") or "",
+        "localizacion": {
+            "libro": localizacion.get("libro") or "",
+            "tomo": localizacion.get("tomo") or "",
+            "mes": localizacion.get("mes") or "",
+            "anio": localizacion.get("anio") or "",
+            "pagina": localizacion.get("pagina") or "",
+        },
+        "textoSnippet": _strip_html(texto)[:700],
+        "extractoSnippet": extracto[:700],
+    }
+    if include_raw:
+        normalized["raw"] = item
+    return normalized
+
+
 @app.get("/sjf/search")
 @app.get("/jurisprudencia/buscar")
 def sjf_search(
@@ -293,6 +373,128 @@ def sjf_search(
         "size": size,
         "count": len(items),
         "hasMore": (page + 1) < total_pages,
+        "items": items,
+    }
+
+
+@app.get("/precedentes/buscar")
+@app.get("/scjn/precedentes/buscar")
+def scjn_precedentes_buscar(
+    q: str = Query(default=""),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, ge=1, le=50),
+    indice: str = Query(default="ejecutorias"),
+    fuente: str = Query(default="SJF"),
+    extractos: int = Query(default=200, ge=0, le=1000),
+    semantica: int = Query(default=0, ge=0, le=1),
+    includeRaw: bool = Query(default=False),
+):
+    payload = {
+        "q": str(q or ""),
+        "page": page,
+        "size": size,
+        "indice": str(indice or "ejecutorias"),
+        "fuente": str(fuente or "SJF"),
+        "extractos": extractos,
+        "semantica": semantica,
+        "filtros": {},
+        "sortField": "",
+        "sortDireccion": "",
+    }
+
+    status, data = _http_json(
+        f"{BJ_SCJN_BASE}/busqueda",
+        method="POST",
+        body=payload,
+        headers=_bj_scjn_headers(content_type=True),
+    )
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "SCJN buscador request failed", "status": status, "upstream": data},
+        )
+
+    resultados = _extract_bj_items(data)
+    total = _to_int(data.get("total") if isinstance(data, dict) else None, len(resultados))
+    total_paginas = _to_int(
+        data.get("totalPaginas") if isinstance(data, dict) else None,
+        int((total + size - 1) / size) if size else 0,
+    )
+    items = [_normalize_bj_item(item, include_raw=includeRaw) for item in resultados]
+
+    return {
+        "query": payload["q"],
+        "fuente": payload["fuente"],
+        "indice": payload["indice"],
+        "semantica": payload["semantica"],
+        "total": total,
+        "totalPages": total_paginas,
+        "page": page,
+        "size": size,
+        "count": len(items),
+        "hasMore": page < total_paginas,
+        "items": items,
+    }
+
+
+@app.post("/precedentes/buscar")
+@app.post("/scjn/precedentes/buscar")
+def scjn_precedentes_buscar_post(
+    includeRaw: bool = Query(default=False),
+    payload: dict = Body(default={}),
+):
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"error": "Invalid payload"})
+
+    req_payload = {
+        "q": str(payload.get("q") or ""),
+        "page": _to_int(payload.get("page"), 1),
+        "size": _to_int(payload.get("size"), 10),
+        "indice": str(payload.get("indice") or "ejecutorias"),
+        "fuente": str(payload.get("fuente") or "SJF"),
+        "extractos": _to_int(payload.get("extractos"), 200),
+        "semantica": _to_int(payload.get("semantica"), 0),
+        "filtros": payload.get("filtros") if isinstance(payload.get("filtros"), dict) else {},
+        "sortField": str(payload.get("sortField") or ""),
+        "sortDireccion": str(payload.get("sortDireccion") or ""),
+    }
+
+    req_payload["page"] = max(1, req_payload["page"])
+    req_payload["size"] = min(50, max(1, req_payload["size"]))
+    req_payload["extractos"] = min(1000, max(0, req_payload["extractos"]))
+    req_payload["semantica"] = 1 if req_payload["semantica"] == 1 else 0
+
+    status, data = _http_json(
+        f"{BJ_SCJN_BASE}/busqueda",
+        method="POST",
+        body=req_payload,
+        headers=_bj_scjn_headers(content_type=True),
+    )
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "SCJN buscador request failed", "status": status, "upstream": data},
+        )
+
+    resultados = _extract_bj_items(data)
+    total = _to_int(data.get("total") if isinstance(data, dict) else None, len(resultados))
+    total_paginas = _to_int(
+        data.get("totalPaginas") if isinstance(data, dict) else None,
+        int((total + req_payload["size"] - 1) / req_payload["size"]) if req_payload["size"] else 0,
+    )
+    items = [_normalize_bj_item(item, include_raw=includeRaw) for item in resultados]
+
+    return {
+        "query": req_payload["q"],
+        "fuente": req_payload["fuente"],
+        "indice": req_payload["indice"],
+        "semantica": req_payload["semantica"],
+        "total": total,
+        "totalPages": total_paginas,
+        "page": req_payload["page"],
+        "size": req_payload["size"],
+        "count": len(items),
+        "hasMore": req_payload["page"] < total_paginas,
         "items": items,
     }
 
