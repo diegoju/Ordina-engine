@@ -37,7 +37,7 @@ Si solo quieres probarlo:
 
 GPT oficial:
 
-➡️ Próximamente enlace oficial de Ordina
+➡️ [Ordina Chat](https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina)
 
 Base URL de la API:
 
@@ -161,7 +161,7 @@ Selecciona según lo que necesites:
 
 Usar el GPT existente:
 
-Próximamente enlace oficial de Ordina.
+[Ordina Chat](https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina)
 
 ### Opción personalizada (Actions)
 
