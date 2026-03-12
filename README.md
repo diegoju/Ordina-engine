@@ -227,7 +227,7 @@ Solo necesarias si alguna fuente bloquea solicitudes:
 
 ## 🔌 Servidor MCP (Model Context Protocol)
 
-Tambien puedes usar Ordina-engine como servidor MCP por `stdio` para clientes compatibles (Claude Desktop, IDEs, agentes).
+También puedes usar Ordina-engine como servidor MCP por `stdio` para clientes compatibles (Claude Desktop, IDEs, agentes).
 
 ### Ejecutar local
 
