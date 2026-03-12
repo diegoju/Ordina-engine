@@ -1,36 +1,306 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-<title>Ordina</title>
-<style>
-body{
-font-family: Arial;
-background:#0f172a;
-color:white;
-display:flex;
-height:100vh;
-align-items:center;
-justify-content:center;
-flex-direction:column;
-}
-a{
-background:#6366f1;
-padding:12px 20px;
-color:white;
-text-decoration:none;
-border-radius:8px;
-margin-top:20px;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ordina</title>
+  <meta name="description" content="Asistente de investigación jurídica basado en IA para consulta de legislación, jurisprudencia y precedentes mexicanos." />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text: #f3f4f6;
+      --muted: #b8c0d4;
+      --accent: #8b5cf6;
+      --accent-2: #f59e0b;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(139, 92, 246, 0.20), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.16), transparent 30%),
+        linear-gradient(180deg, #0b1020 0%, #0a0f1a 100%);
+      color: var(--text);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 32px 20px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 960px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 0;
+      min-height: 560px;
+    }
+
+    .left {
+      padding: 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 18px rgba(139, 92, 246, 0.75);
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: clamp(42px, 8vw, 72px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 0 0 28px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.65;
+      max-width: 560px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 26px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      font-weight: 600;
+      transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #6d28d9);
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.35);
+    }
+
+    .btn-secondary {
+      color: var(--text);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .meta span {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .right {
+      position: relative;
+      padding: 36px;
+      display: grid;
+      place-items: center;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(139, 92, 246, 0.28), transparent 25%),
+        radial-gradient(circle at 80% 70%, rgba(245, 158, 11, 0.22), transparent 22%);
+    }
+
+    .orb {
+      width: min(320px, 70vw);
+      aspect-ratio: 1;
+      border-radius: 28px;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03));
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        0 30px 70px rgba(0,0,0,0.35);
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .orb::before,
+    .orb::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.8;
+    }
+
+    .orb::before {
+      width: 160px;
+      height: 160px;
+      background: rgba(139, 92, 246, 0.45);
+      top: -20px;
+      right: -20px;
+    }
+
+    .orb::after {
+      width: 140px;
+      height: 140px;
+      background: rgba(245, 158, 11, 0.35);
+      bottom: -18px;
+      left: -18px;
+    }
+
+    .logo {
+      position: relative;
+      z-index: 1;
+      font-size: clamp(30px, 5vw, 54px);
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .logo .o {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 18px;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .right {
+        border-left: 0;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        min-height: 260px;
+      }
+
+      .left {
+        padding: 38px 26px;
+      }
+
+      .right {
+        padding: 26px;
+      }
+
+      .subtitle {
+        font-size: 16px;
+      }
+    }
+  </style>
 </head>
 <body>
+  <main class="wrap">
+    <section class="card hero">
+      <div class="left">
+        <div class="badge">
+          <span class="dot"></span>
+          Investigación jurídica + IA
+        </div>
 
-<h1>Ordina</h1>
-<p>Asistente de investigación jurídica basado en IA.</p>
+        <h1>Ordina</h1>
 
-<a href="https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina">
-Abrir Ordina
-</a>
+        <p class="subtitle">
+          Asistente de investigación jurídica basado en IA para consultar legislación,
+          jurisprudencia y precedentes mexicanos a partir de fuentes jurídicas públicas.
+        </p>
 
+        <div class="actions">
+          <a class="btn btn-primary" href="https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina">
+            Abrir Ordina
+          </a>
+
+          <a class="btn btn-secondary" href="https://github.com/diegoju/Ordina-engine">
+            Ver repositorio
+          </a>
+        </div>
+
+        <div class="meta">
+          <span>GPT personalizado</span>
+          <span>Fuentes jurídicas mexicanas</span>
+          <span>Ordina-engine API</span>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="orb">
+          <div class="logo"><span class="o">O</span>rdina</div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Proyecto personal de tecnología aplicada al derecho.
+    </footer>
+  </main>
 </body>
 </html>
