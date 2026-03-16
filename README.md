@@ -117,6 +117,8 @@ Detalle:
 
 - `GET /jurisprudencia/detalle?ius=<numero>`
 
+Para depurar fallos del upstream SJF, puedes agregar `debug=true` y revisar las URLs e intentos realizados por el proxy.
+
 Ejemplo:
 
 ```bash

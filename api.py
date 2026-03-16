@@ -5,6 +5,8 @@ import re
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import socket
+import time
 from urllib import parse, request, error
 from typing import Optional
 
@@ -158,8 +160,82 @@ def _http_json(url: str, method="GET", body=None, headers=None):
         except json.JSONDecodeError:
             parsed = {"rawText": raw}
         return exc.code, parsed
-    except Exception:
-        return 502, {"error": "SJF request failed"}
+    except error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        return 502, {
+            "error": "upstream request failed",
+            "errorType": type(exc).__name__,
+            "reasonType": type(reason).__name__ if reason is not None else "Unknown",
+            "detail": str(reason or exc),
+        }
+    except socket.timeout as exc:
+        return 504, {
+            "error": "upstream request timed out",
+            "errorType": type(exc).__name__,
+            "detail": str(exc),
+        }
+    except Exception as exc:
+        return 502, {
+            "error": "upstream request failed",
+            "errorType": type(exc).__name__,
+            "detail": str(exc),
+        }
+
+
+def _redact_headers(headers):
+    safe_headers = {}
+    for key, value in (headers or {}).items():
+        if str(key).lower() == "cookie":
+            safe_headers[key] = "<redacted>"
+        else:
+            safe_headers[key] = value
+    return safe_headers
+
+
+def _sjf_detail_attempt(ius: int, host_name: str, is_semanal, include_host_name: bool):
+    params = {}
+    if include_host_name:
+        params["hostName"] = host_name
+    if is_semanal is True:
+        params["isSemanal"] = "true"
+    elif is_semanal is False:
+        params["isSemanal"] = "false"
+
+    query = parse.urlencode(params)
+    url = f"{SJF_BASE}/tesis/{ius}"
+    if query:
+        url = f"{url}?{query}"
+
+    headers = _sjf_headers(content_type=False)
+    started_at = time.time()
+    status, data = _http_json(url, method="GET", headers=headers)
+    elapsed_ms = int((time.time() - started_at) * 1000)
+
+    return {
+        "status": status,
+        "data": data,
+        "url": url,
+        "isSemanal": is_semanal,
+        "hostNameIncluded": include_host_name,
+        "durationMs": elapsed_ms,
+        "requestHeaders": _redact_headers(headers),
+    }
+
+
+def _sjf_detail_attempts(ius: int, host_name: str, is_semanal: Optional[bool]):
+    if is_semanal is None:
+        plans = [(True, True), (False, True), (True, False), (False, False)]
+    else:
+        plans = [(bool(is_semanal), True), (bool(is_semanal), False)]
+
+    attempts = []
+    for sem_value, include_host_name in plans:
+        attempt = _sjf_detail_attempt(ius, host_name, sem_value, include_host_name)
+        attempts.append(attempt)
+        if attempt["status"] < 400:
+            return attempt, attempts
+
+    return attempts[-1], attempts
 
 
 def _extract_docs(payload):
@@ -547,28 +623,41 @@ def sjf_detail(
     isSemanal: Optional[bool] = Query(default=None),
     hostName: Optional[str] = Query(default="https://sjf2.scjn.gob.mx"),
     includeRaw: Optional[bool] = Query(default=False),
+    debug: bool = Query(default=False),
 ):
     hostName = hostName or "https://sjf2.scjn.gob.mx"
     includeRaw = bool(includeRaw)
-    def call_detail(sem):
-        params = {"hostName": hostName}
-        if sem is True:
-            params["isSemanal"] = "true"
-        query = parse.urlencode(params)
-        url = f"{SJF_BASE}/tesis/{ius}?{query}"
-        return _http_json(url, method="GET", headers=_sjf_headers(content_type=False)), sem
+    debug = bool(debug)
 
-    if isSemanal is None:
-        (status, data), used = call_detail(True)
-        if status >= 400:
-            (status, data), used = call_detail(False)
-    else:
-        (status, data), used = call_detail(bool(isSemanal))
+    result, attempts = _sjf_detail_attempts(ius, hostName, isSemanal)
+    status = result["status"]
+    data = result["data"]
+    used = result["isSemanal"]
 
     if status >= 400:
+        error_content = {
+            "error": "SJF detail request failed",
+            "status": status,
+            "upstream": data,
+        }
+        if debug:
+            error_content["debug"] = {
+                "attempts": [
+                    {
+                        "status": attempt["status"],
+                        "url": attempt["url"],
+                        "isSemanal": attempt["isSemanal"],
+                        "hostNameIncluded": attempt["hostNameIncluded"],
+                        "durationMs": attempt["durationMs"],
+                        "requestHeaders": attempt["requestHeaders"],
+                        "upstream": attempt["data"],
+                    }
+                    for attempt in attempts
+                ]
+            }
         return JSONResponse(
             status_code=status,
-            content={"error": "SJF detail request failed", "status": status, "upstream": data},
+            content=error_content,
         )
 
     texto = ""
@@ -592,6 +681,19 @@ def sjf_detail(
     }
     if includeRaw:
         response["raw"] = data
+    if debug:
+        response["debug"] = {
+            "attempts": [
+                {
+                    "status": attempt["status"],
+                    "url": attempt["url"],
+                    "isSemanal": attempt["isSemanal"],
+                    "hostNameIncluded": attempt["hostNameIncluded"],
+                    "durationMs": attempt["durationMs"],
+                }
+                for attempt in attempts
+            ]
+        }
     return response
 
 
