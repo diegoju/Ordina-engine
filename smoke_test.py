@@ -102,6 +102,25 @@ def check_jurislex_detail():
         raise ValueError("texto vacío")
 
 
+def check_precedentes_search():
+    status, data = get_json(
+        "/precedentes/buscar",
+        {
+            "q": "partido*",
+            "indice": "ejecutorias",
+            "page": 1,
+            "size": 1,
+        },
+    )
+    if status != 200:
+        raise ValueError(f"HTTP {status}")
+    if data.get("count", 0) < 1:
+        raise ValueError("count < 1")
+    items = data.get("items") or []
+    if not items or not items[0].get("registroDigital"):
+        raise ValueError("sin registroDigital en resultado")
+
+
 def main():
     print(f"Running smoke tests against: {BASE_URL}")
     checks = [
@@ -110,6 +129,7 @@ def main():
         ("sjf search", check_sjf_search),
         ("jurislex search", check_jurislex_search),
         ("jurislex detail", check_jurislex_detail),
+        ("precedentes search", check_precedentes_search),
     ]
 
     ok = True
