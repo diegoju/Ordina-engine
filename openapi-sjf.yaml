@@ -129,23 +129,13 @@ paths:
     get:
       operationId: obtenerDetalleJurisprudencia
       summary: Obtener detalle de tesis por IUS
+      description: Enviar solo el IUS. El proxy resuelve internamente isSemanal y hostName.
       parameters:
         - name: ius
           in: query
           required: true
           schema:
             type: integer
-        - name: isSemanal
-          in: query
-          required: false
-          schema:
-            type: boolean
-        - name: hostName
-          in: query
-          required: false
-          schema:
-            type: string
-            default: https://sjf2.scjn.gob.mx
         - name: includeRaw
           in: query
           required: false
@@ -159,6 +149,137 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JurisprudenciaDetailResponse"
+
+  /precedentes/buscar:
+    get:
+      operationId: buscarPrecedentesSCJN
+      summary: Buscar precedentes y sentencias en buscador juridico SCJN
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          example: partido*
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: indice
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ejecutorias
+        - name: fuente
+          in: query
+          required: false
+          schema:
+            type: string
+            default: SJF
+        - name: extractos
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+            default: 200
+        - name: semantica
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado paginado normalizado de precedentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrecedentesSearchResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarPrecedentesSCJNAvanzado
+      summary: Buscar precedentes SCJN con payload avanzado
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                q:
+                  type: string
+                page:
+                  type: integer
+                size:
+                  type: integer
+                indice:
+                  type: string
+                fuente:
+                  type: string
+                extractos:
+                  type: integer
+                semantica:
+                  type: integer
+                filtros:
+                  type: object
+                  properties: {}
+                sortField:
+                  type: string
+                sortDireccion:
+                  type: string
+      responses:
+        "200":
+          description: Resultado paginado normalizado de precedentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrecedentesSearchResponse"
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -229,3 +350,93 @@ components:
         raw:
           type: object
           properties: {}
+
+    PrecedenteItem:
+      type: object
+      properties:
+        registroDigital:
+          type: integer
+          nullable: true
+        rubro:
+          type: string
+        tipoEjecutoria:
+          type: string
+        tipoAsunto:
+          type: string
+        asunto:
+          type: string
+        organoJurisdiccional:
+          type: string
+        instancia:
+          type: string
+        epoca:
+          type: object
+          properties:
+            numero:
+              type: string
+            nombre:
+              type: string
+        tesis:
+          type: string
+        numeroExpediente:
+          type: string
+        promovente:
+          type: string
+        fuente:
+          type: string
+        volumen:
+          type: string
+        localizacion:
+          type: object
+          properties:
+            libro:
+              type: string
+            tomo:
+              type: string
+            mes:
+              type: string
+            anio:
+              type: string
+            pagina:
+              type: string
+        textoSnippet:
+          type: string
+        extractoSnippet:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    PrecedentesSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        fuente:
+          type: string
+        indice:
+          type: string
+        semantica:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        count:
+          type: integer
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrecedenteItem"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
