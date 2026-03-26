@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from fastapi.responses import JSONResponse
@@ -9,23 +10,184 @@ from fastapi.responses import JSONResponse
 import api as ordina_api
 
 
+ROOT = Path(__file__).resolve().parent
+VERSION = "1.1.0"
+DEFAULT_SJF_HOST = "https://sjf2.scjn.gob.mx"
+
+
 def _unwrap_fastapi_response(result: Any) -> Any:
     if not isinstance(result, JSONResponse):
         return result
 
-    raw = result.body.decode("utf-8", errors="replace")
+    raw = bytes(result.body).decode("utf-8", errors="replace")
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
         payload = {"rawText": raw}
 
     if result.status_code >= 400:
+        error_code = "UPSTREAM_REQUEST_FAILED"
+        if result.status_code == 404:
+            error_code = "NOT_FOUND"
+        elif result.status_code == 504:
+            error_code = "UPSTREAM_TIMEOUT"
+        elif result.status_code == 502:
+            error_code = "UPSTREAM_UNAVAILABLE"
         return {
-            "error": "Upstream request failed",
-            "status": result.status_code,
-            "upstream": payload,
+            "ok": False,
+            "error": {
+                "code": error_code,
+                "message": "Upstream request failed",
+                "status": result.status_code,
+                "upstream": payload,
+            },
         }
     return payload
+
+
+def _result_is_error(payload: Any) -> bool:
+    return isinstance(payload, dict) and payload.get("ok") is False and isinstance(payload.get("error"), dict)
+
+
+def _top_items(items: Any, limit: int = 3) -> list[Any]:
+    if not isinstance(items, list):
+        return []
+    return items[: max(0, limit)]
+
+
+def _law_matches(nombre: str) -> list[dict[str, Any]]:
+    result = buscar_ley(nombre=nombre)
+    if _result_is_error(result):
+        raise ValueError(result["error"]["message"])
+    if not isinstance(result, list):
+        return []
+    return result
+
+
+def _rank_laws(nombre: str, leyes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    nombre_norm = (nombre or "").strip().lower()
+    if not nombre_norm:
+        return leyes
+
+    def score(item: dict[str, Any]) -> tuple[int, int, str]:
+        law_name = str(item.get("nombre") or "")
+        law_norm = law_name.lower()
+        if law_norm == nombre_norm:
+            return (0, len(law_name), law_norm)
+        if law_norm.startswith(nombre_norm):
+            return (1, len(law_name), law_norm)
+        if nombre_norm in law_norm:
+            return (2, len(law_name), law_norm)
+        return (3, len(law_name), law_norm)
+
+    return sorted(leyes, key=score)
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _infer_consulta_strategy(
+    consulta: str,
+    estrategia: str,
+    nombre_ley: Optional[str],
+    numero_articulo: Optional[int],
+) -> str:
+    estrategia_norm = (estrategia or "auto").strip().lower()
+    if estrategia_norm in {"ley", "articulo", "jurisprudencia", "precedente"}:
+        return estrategia_norm
+
+    consulta_norm = (consulta or "").strip().lower()
+    if numero_articulo is not None or nombre_ley:
+        return "articulo"
+    if any(token in consulta_norm for token in ["articulo ", "art. ", "art "]):
+        return "articulo"
+    if any(token in consulta_norm for token in ["jurisprudencia", "ius", "tesis", "sjf"]):
+        return "jurisprudencia"
+    if any(token in consulta_norm for token in ["precedente", "precedentes", "ejecutoria", "ejecutorias"]):
+        return "precedente"
+    return "ley"
+
+
+def _read_text_file(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _resource_catalog_preview(limit: int = 25) -> str:
+    leyes = getattr(ordina_api, "leyes", [])
+    if not isinstance(leyes, list):
+        return "Catalogo no disponible"
+    rows = []
+    for item in leyes[: max(0, limit)]:
+        rows.append(
+            f'- id={item.get("id")} categoria={item.get("categoria")} nombre={item.get("nombre")}'
+        )
+    return "\n".join(rows)
+
+
+def _summary_text(result: Any) -> str:
+    if _result_is_error(result):
+        error = result["error"]
+        return f'Error {error.get("code")}: {error.get("message")} (status={error.get("status")})'
+
+    if isinstance(result, list):
+        return f"{len(result)} resultados"
+
+    if not isinstance(result, dict):
+        return str(result)
+
+    if "status" in result and "service" in result and "checks" not in result:
+        return f'Servicio {result.get("service")}: {result.get("status")}'
+
+    if "status" in result and "checks" in result:
+        return f'Health profundo {result.get("status")} con {len(result.get("checks") or [])} checks'
+
+    if "selectedLaw" in result:
+        selected = result.get("selectedLaw") or {}
+        count = result.get("count", 0)
+        return f'Ley seleccionada: {selected.get("nombre", "sin ley")} ({count} articulos)' 
+
+    if "selectedItem" in result:
+        item = result.get("selectedItem") or {}
+        return f'Jurisprudencia seleccionada IUS {item.get("ius", "?")}'
+
+    if "strategyUsed" in result and "query" in result:
+        return f'Consulta resuelta con estrategia {result.get("strategyUsed")}'
+
+    if "items" in result and "count" in result:
+        extra = []
+        if result.get("query"):
+            extra.append(f'query="{result.get("query")}"')
+        if result.get("count") is not None:
+            extra.append(f'count={result.get("count")}')
+        if result.get("total") is not None:
+            extra.append(f'total={result.get("total")}')
+        return ", ".join(extra) if extra else "Operacion completada"
+
+    if "titulo" in result and "textoPlano" in result:
+        return f'Detalle obtenido: {result.get("titulo") or result.get("rubro") or "sin titulo"}'
+
+    return json.dumps(result, ensure_ascii=False)
+
+
+def _tool_success(result: Any) -> dict[str, Any]:
+    text_result = _summary_text(result)
+    return {
+        "content": [{"type": "text", "text": text_result}],
+        "structuredContent": result,
+        "isError": _result_is_error(result),
+    }
+
+
+def health() -> Any:
+    return ordina_api.health_check()
+
+
+def health_profundo() -> Any:
+    return _unwrap_fastapi_response(ordina_api.deep_health_check())
 
 
 def buscar_ley(id: Optional[int] = None, categoria: Optional[int] = None, nombre: Optional[str] = None) -> Any:
@@ -33,8 +195,30 @@ def buscar_ley(id: Optional[int] = None, categoria: Optional[int] = None, nombre
     return _unwrap_fastapi_response(result)
 
 
+def resolver_ley_por_nombre(nombre: str, maxResultados: int = 5) -> Any:
+    leyes = _rank_laws(nombre, _law_matches(nombre))
+    top = leyes[: max(1, min(maxResultados, 20))]
+    return {
+        "query": nombre,
+        "count": len(top),
+        "selectedLaw": top[0] if top else None,
+        "items": top,
+        "warnings": [] if top else ["No se encontraron leyes coincidentes"],
+    }
+
+
 def buscar_jurisprudencia(q: str = "", page: int = 0, size: int = 10, includeRaw: bool = False) -> Any:
     result = ordina_api.sjf_search(q=q, page=page, size=size, includeRaw=includeRaw)
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_jurisprudencia_avanzada(
+    payload: dict[str, Any],
+    page: int = 0,
+    size: int = 10,
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.sjf_search_advanced(page=page, size=size, includeRaw=includeRaw, payload=payload)
     return _unwrap_fastapi_response(result)
 
 
@@ -42,13 +226,88 @@ def obtener_detalle_jurisprudencia(
     ius: int,
     isSemanal: Optional[bool] = None,
     includeRaw: bool = False,
+    debug: bool = False,
 ) -> Any:
     result = ordina_api.sjf_detail(
         ius=ius,
         isSemanal=isSemanal,
-        hostName="https://sjf2.scjn.gob.mx",
+        hostName=DEFAULT_SJF_HOST,
+        includeRaw=includeRaw,
+        debug=debug,
+    )
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_y_detallar_jurisprudencia(
+    q: str,
+    page: int = 0,
+    size: int = 10,
+    matchIndex: int = 0,
+    includeRaw: bool = False,
+    debug: bool = False,
+) -> Any:
+    search = buscar_jurisprudencia(q=q, page=page, size=size, includeRaw=False)
+    if _result_is_error(search):
+        return search
+
+    items = search.get("items") if isinstance(search, dict) else []
+    if not items:
+        return {
+            "query": q,
+            "count": 0,
+            "items": [],
+            "selectedItem": None,
+            "detail": None,
+            "warnings": ["No se encontraron resultados de jurisprudencia"],
+        }
+
+    index = max(0, min(matchIndex, len(items) - 1))
+    selected = items[index]
+    detail = obtener_detalle_jurisprudencia(
+        ius=_safe_int(selected.get("ius"), 0),
+        includeRaw=includeRaw,
+        debug=debug,
+    )
+    return {
+        "query": q,
+        "count": len(items),
+        "selectedIndex": index,
+        "selectedItem": selected,
+        "topMatches": _top_items(items, 3),
+        "detail": detail,
+    }
+
+
+def buscar_precedentes(
+    q: str = "",
+    page: int = 1,
+    size: int = 10,
+    indice: str = "ejecutorias",
+    fuente: str = "SJF",
+    extractos: int = 200,
+    semantica: int = 0,
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.scjn_precedentes_buscar(
+        q=q,
+        page=page,
+        size=size,
+        indice=indice,
+        fuente=fuente,
+        extractos=extractos,
+        semantica=semantica,
         includeRaw=includeRaw,
     )
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_precedentes_avanzado(payload: dict[str, Any], includeRaw: bool = False) -> Any:
+    result = ordina_api.scjn_precedentes_buscar_post(includeRaw=includeRaw, payload=payload)
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_decretos_jurislex(idLegislacion: int, idOrdenamiento: Optional[int] = None) -> Any:
+    result = ordina_api.jurislex_decretos(idLegislacion=idLegislacion, idOrdenamiento=idOrdenamiento)
     return _unwrap_fastapi_response(result)
 
 
@@ -75,6 +334,11 @@ def buscar_articulos_jurislex(
     return _unwrap_fastapi_response(result)
 
 
+def buscar_articulos_jurislex_avanzado(payload: dict[str, Any]) -> Any:
+    result = ordina_api.jurislex_buscar_articulos_post(payload=payload)
+    return _unwrap_fastapi_response(result)
+
+
 def obtener_detalle_articulo_jurislex(
     categoria: int,
     idLegislacion: int,
@@ -90,7 +354,165 @@ def obtener_detalle_articulo_jurislex(
     return _unwrap_fastapi_response(result)
 
 
+def buscar_articulo_por_ley_y_numero(
+    nombreLey: str,
+    numeroArticulo: int,
+    maxLeyes: int = 5,
+    includeRaw: bool = False,
+) -> Any:
+    leyes = _rank_laws(nombreLey, _law_matches(nombreLey))[: max(1, min(maxLeyes, 20))]
+    if not leyes:
+        return {
+            "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
+            "selectedLaw": None,
+            "count": 0,
+            "items": [],
+            "warnings": ["No se encontro una ley coincidente"],
+        }
+
+    for ley in leyes:
+        categoria = ley.get("categoria")
+        id_legislacion = ley.get("id")
+        if categoria is None or id_legislacion is None:
+            continue
+        search = buscar_articulos_jurislex(
+            categoria=int(categoria),
+            idLegislacion=int(id_legislacion),
+            desc=str(numeroArticulo),
+            soloArticulo=True,
+            articuloNumero=int(numeroArticulo),
+            elementos=10,
+            includeRaw=includeRaw,
+        )
+        if _result_is_error(search):
+            return search
+        if isinstance(search, dict) and search.get("count", 0) > 0:
+            return {
+                "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
+                "selectedLaw": ley,
+                "count": search.get("count", 0),
+                "items": search.get("items", []),
+                "topLawMatches": leyes,
+            }
+
+    return {
+        "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
+        "selectedLaw": leyes[0],
+        "count": 0,
+        "items": [],
+        "topLawMatches": leyes,
+        "warnings": ["Se encontro la ley, pero no hubo articulos coincidentes con ese numero"],
+    }
+
+
+def obtener_articulo_por_ley_y_numero(
+    nombreLey: str,
+    numeroArticulo: int,
+    maxLeyes: int = 5,
+    includeRaw: bool = False,
+) -> Any:
+    search = buscar_articulo_por_ley_y_numero(
+        nombreLey=nombreLey,
+        numeroArticulo=numeroArticulo,
+        maxLeyes=maxLeyes,
+        includeRaw=includeRaw,
+    )
+    if _result_is_error(search):
+        return search
+
+    items = search.get("items") if isinstance(search, dict) else []
+    selected_law = search.get("selectedLaw") if isinstance(search, dict) else None
+    if not items or not isinstance(selected_law, dict):
+        return {
+            **(search if isinstance(search, dict) else {}),
+            "detail": None,
+        }
+
+    top_item = items[0]
+    categoria = _safe_int(selected_law.get("categoria"), 0)
+    id_legislacion = _safe_int(selected_law.get("id"), 0)
+    id_articulo = _safe_int(top_item.get("idArticulo"), 0)
+    detail = obtener_detalle_articulo_jurislex(
+        categoria=categoria,
+        idLegislacion=id_legislacion,
+        idArticulo=id_articulo,
+        includeRaw=includeRaw,
+    )
+    return {
+        **search,
+        "selectedItem": top_item,
+        "detail": detail,
+    }
+
+
+def consulta_juridica_completa(
+    consulta: str,
+    estrategia: str = "auto",
+    nombreLey: Optional[str] = None,
+    numeroArticulo: Optional[int] = None,
+    matchIndex: int = 0,
+    includeRaw: bool = False,
+) -> Any:
+    strategy_used = _infer_consulta_strategy(consulta, estrategia, nombreLey, numeroArticulo)
+
+    if strategy_used == "articulo":
+        if numeroArticulo is None:
+            return {
+                "query": consulta,
+                "strategyUsed": strategy_used,
+                "warnings": ["Para estrategia de articulo necesitas `numeroArticulo` o una consulta mas estructurada"],
+                "result": None,
+            }
+        result = obtener_articulo_por_ley_y_numero(
+            nombreLey=nombreLey or consulta,
+            numeroArticulo=numeroArticulo,
+            includeRaw=includeRaw,
+        )
+        return {
+            "query": consulta,
+            "strategyUsed": strategy_used,
+            "result": result,
+        }
+
+    if strategy_used == "jurisprudencia":
+        result = buscar_y_detallar_jurisprudencia(
+            q=consulta,
+            matchIndex=matchIndex,
+            includeRaw=includeRaw,
+        )
+        return {
+            "query": consulta,
+            "strategyUsed": strategy_used,
+            "result": result,
+        }
+
+    if strategy_used == "precedente":
+        result = buscar_precedentes(q=consulta, includeRaw=includeRaw)
+        return {
+            "query": consulta,
+            "strategyUsed": strategy_used,
+            "result": result,
+        }
+
+    law_matches = resolver_ley_por_nombre(nombreLey or consulta)
+    return {
+        "query": consulta,
+        "strategyUsed": strategy_used,
+        "result": law_matches,
+    }
+
+
 TOOLS: dict[str, dict[str, Any]] = {
+    "health": {
+        "description": "Revisa el estado basico del servicio Ordina-engine.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "handler": health,
+    },
+    "healthDeep": {
+        "description": "Revisa salud profunda de catalogo, SJF y Jurislex.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "handler": health_profundo,
+    },
     "buscarLey": {
         "description": "Busca leyes por id, categoria o nombre parcial.",
         "inputSchema": {
@@ -104,8 +526,21 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
         "handler": buscar_ley,
     },
+    "resolverLeyPorNombre": {
+        "description": "Resuelve la ley mas probable por nombre y devuelve mejores coincidencias.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "nombre": {"type": "string"},
+                "maxResultados": {"type": "integer", "minimum": 1, "maximum": 20},
+            },
+            "required": ["nombre"],
+            "additionalProperties": False,
+        },
+        "handler": resolver_ley_por_nombre,
+    },
     "buscarJurisprudencia": {
-        "description": "Busca jurisprudencia SJF (recomendado: size=10, page=0).",
+        "description": "Busca jurisprudencia SJF con parametros recomendados para agentes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -118,6 +553,21 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
         "handler": buscar_jurisprudencia,
     },
+    "buscarJurisprudenciaAvanzada": {
+        "description": "Ejecuta busqueda avanzada SJF con payload completo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "object"},
+                "page": {"type": "integer", "minimum": 0},
+                "size": {"type": "integer", "minimum": 1, "maximum": 50},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_jurisprudencia_avanzada,
+    },
     "obtenerDetalleJurisprudencia": {
         "description": "Obtiene detalle de jurisprudencia por IUS.",
         "inputSchema": {
@@ -126,14 +576,76 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "ius": {"type": "integer"},
                 "isSemanal": {"type": "boolean"},
                 "includeRaw": {"type": "boolean"},
+                "debug": {"type": "boolean"},
             },
             "required": ["ius"],
             "additionalProperties": False,
         },
         "handler": obtener_detalle_jurisprudencia,
     },
+    "buscarYDetallarJurisprudencia": {
+        "description": "Busca jurisprudencia y trae el detalle del mejor match o del indice pedido.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string"},
+                "page": {"type": "integer", "minimum": 0},
+                "size": {"type": "integer", "minimum": 1, "maximum": 50},
+                "matchIndex": {"type": "integer", "minimum": 0},
+                "includeRaw": {"type": "boolean"},
+                "debug": {"type": "boolean"},
+            },
+            "required": ["q"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_y_detallar_jurisprudencia,
+    },
+    "buscarPrecedentes": {
+        "description": "Busca precedentes o ejecutorias SCJN.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string"},
+                "page": {"type": "integer", "minimum": 1},
+                "size": {"type": "integer", "minimum": 1, "maximum": 50},
+                "indice": {"type": "string"},
+                "fuente": {"type": "string"},
+                "extractos": {"type": "integer", "minimum": 0, "maximum": 1000},
+                "semantica": {"type": "integer", "minimum": 0, "maximum": 1},
+                "includeRaw": {"type": "boolean"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": buscar_precedentes,
+    },
+    "buscarPrecedentesAvanzado": {
+        "description": "Ejecuta busqueda avanzada de precedentes SCJN con payload completo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "object"},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_precedentes_avanzado,
+    },
+    "buscarDecretosJurislex": {
+        "description": "Obtiene decretos y anexos Jurislex por legislacion.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "idLegislacion": {"type": "integer"},
+                "idOrdenamiento": {"type": "integer"},
+            },
+            "required": ["idLegislacion"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_decretos_jurislex,
+    },
     "buscarArticulosJurislex": {
-        "description": "Busca articulos Jurislex (requiere categoria e idLegislacion).",
+        "description": "Busca articulos Jurislex por categoria e idLegislacion.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -151,6 +663,18 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
         "handler": buscar_articulos_jurislex,
     },
+    "buscarArticulosJurislexAvanzado": {
+        "description": "Ejecuta busqueda avanzada Jurislex con body completo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "object"},
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_articulos_jurislex_avanzado,
+    },
     "obtenerDetalleArticuloJurislex": {
         "description": "Obtiene detalle de un articulo Jurislex por idArticulo.",
         "inputSchema": {
@@ -165,6 +689,115 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
         "handler": obtener_detalle_articulo_jurislex,
+    },
+    "buscarArticuloPorLeyYNumero": {
+        "description": "Resuelve una ley por nombre y busca articulos exactos por numero.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "nombreLey": {"type": "string"},
+                "numeroArticulo": {"type": "integer"},
+                "maxLeyes": {"type": "integer", "minimum": 1, "maximum": 20},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["nombreLey", "numeroArticulo"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_articulo_por_ley_y_numero,
+    },
+    "obtenerArticuloPorLeyYNumero": {
+        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "nombreLey": {"type": "string"},
+                "numeroArticulo": {"type": "integer"},
+                "maxLeyes": {"type": "integer", "minimum": 1, "maximum": 20},
+                "includeRaw": {"type": "boolean"}
+            },
+            "required": ["nombreLey", "numeroArticulo"],
+            "additionalProperties": False,
+        },
+        "handler": obtener_articulo_por_ley_y_numero,
+    },
+    "consultaJuridicaCompleta": {
+        "description": "Decide si conviene consultar leyes, articulos, jurisprudencia o precedentes y ejecuta el flujo base.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "consulta": {"type": "string"},
+                "estrategia": {"type": "string", "enum": ["auto", "ley", "articulo", "jurisprudencia", "precedente"]},
+                "nombreLey": {"type": "string"},
+                "numeroArticulo": {"type": "integer"},
+                "matchIndex": {"type": "integer", "minimum": 0},
+                "includeRaw": {"type": "boolean"}
+            },
+            "required": ["consulta"],
+            "additionalProperties": False,
+        },
+        "handler": consulta_juridica_completa,
+    },
+}
+
+
+RESOURCES: dict[str, dict[str, Any]] = {
+    "ordina://readme": {
+        "name": "README Ordina-engine",
+        "description": "Documentacion principal del proyecto.",
+        "mimeType": "text/markdown",
+        "loader": lambda: _read_text_file(ROOT / "README.md"),
+    },
+    "ordina://instrucciones-minimas": {
+        "name": "Instrucciones minimas",
+        "description": "Flujos recomendados para consultas juridicas.",
+        "mimeType": "text/markdown",
+        "loader": lambda: _read_text_file(ROOT / "Ordina-instrucciones-minimas.md"),
+    },
+    "ordina://openapi/hub": {
+        "name": "OpenAPI principal",
+        "description": "Contrato OpenAPI principal de Ordina-engine.",
+        "mimeType": "text/yaml",
+        "loader": lambda: _read_text_file(ROOT / "openapi-ordina-hub.yaml"),
+    },
+    "ordina://catalogo/preview": {
+        "name": "Preview catalogo leyes",
+        "description": "Primeras leyes del catalogo local para exploracion rapida.",
+        "mimeType": "text/plain",
+        "loader": _resource_catalog_preview,
+    },
+}
+
+
+PROMPTS: dict[str, dict[str, Any]] = {
+    "consulta-juridica-segura": {
+        "description": "Guia para consultar Ordina sin saltarse pasos clave.",
+        "arguments": [],
+        "builder": lambda _args: (
+            "Usa Ordina-engine con este flujo: 1) si quieres delegar la decision inicial, usa consultaJuridicaCompleta; "
+            "2) si la consulta menciona una ley, primero usa buscarLey "
+            "o resolverLeyPorNombre; 2) para articulos usa buscarArticuloPorLeyYNumero o buscarArticulosJurislex; "
+            "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; "
+            "4) para precedentes usa buscarPrecedentes; 5) si no hay resultados, dilo claramente y no inventes datos."
+        ),
+    },
+    "buscar-articulo": {
+        "description": "Prompt guiado para localizar un articulo dentro de una ley.",
+        "arguments": [
+            {"name": "nombreLey", "required": True},
+            {"name": "numeroArticulo", "required": True},
+        ],
+        "builder": lambda args: (
+            f'Busca el articulo {args.get("numeroArticulo")} de la ley "{args.get("nombreLey")}". '
+            "Primero resuelve la ley por nombre y luego usa obtenerArticuloPorLeyYNumero para traer el detalle completo."
+        ),
+    },
+    "buscar-jurisprudencia": {
+        "description": "Prompt guiado para buscar y resumir jurisprudencia SJF.",
+        "arguments": [{"name": "tema", "required": True}],
+        "builder": lambda args: (
+            f'Busca jurisprudencia SJF sobre "{args.get("tema")}" con size=10 y page=0. '
+            "Resume primero los mejores resultados y despues trae detalle del match mas relevante."
+        ),
     },
 }
 
@@ -215,8 +848,12 @@ def _dispatch(method: str, params: dict[str, Any]) -> Any:
     if method == "initialize":
         return {
             "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "Ordina-engine", "version": "1.0.0"},
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "resources": {"subscribe": False, "listChanged": False},
+                "prompts": {"listChanged": False},
+            },
+            "serverInfo": {"name": "Ordina-engine", "version": VERSION},
         }
 
     if method == "tools/list":
@@ -241,11 +878,60 @@ def _dispatch(method: str, params: dict[str, Any]) -> Any:
 
         handler: Callable[..., Any] = meta["handler"]
         result = handler(**args)
-        text_result = json.dumps(result, ensure_ascii=False)
+        return _tool_success(result)
+
+    if method == "resources/list":
+        resources = []
+        for uri, meta in RESOURCES.items():
+            resources.append(
+                {
+                    "uri": uri,
+                    "name": meta["name"],
+                    "description": meta["description"],
+                    "mimeType": meta["mimeType"],
+                }
+            )
+        return {"resources": resources}
+
+    if method == "resources/read":
+        uri = str(params.get("uri") or "")
+        meta = RESOURCES.get(uri)
+        if meta is None:
+            raise ValueError(f"Resource no encontrado: {uri}")
+        text = meta["loader"]()
         return {
-            "content": [{"type": "text", "text": text_result}],
-            "structuredContent": result,
-            "isError": False,
+            "contents": [
+                {
+                    "uri": uri,
+                    "mimeType": meta["mimeType"],
+                    "text": text,
+                }
+            ]
+        }
+
+    if method == "prompts/list":
+        prompts = []
+        for name, meta in PROMPTS.items():
+            prompts.append(
+                {
+                    "name": name,
+                    "description": meta["description"],
+                    "arguments": meta["arguments"],
+                }
+            )
+        return {"prompts": prompts}
+
+    if method == "prompts/get":
+        name = str(params.get("name") or "")
+        args_raw = params.get("arguments")
+        args = args_raw if isinstance(args_raw, dict) else {}
+        meta = PROMPTS.get(name)
+        if meta is None:
+            raise ValueError(f"Prompt no encontrado: {name}")
+        text = meta["builder"](args)
+        return {
+            "description": meta["description"],
+            "messages": [{"role": "user", "content": {"type": "text", "text": text}}],
         }
 
     if method == "ping":
