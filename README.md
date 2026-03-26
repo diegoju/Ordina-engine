@@ -238,13 +238,30 @@ pip install -r requirements.txt
 python mcp_server.py
 ```
 
-### Tools expuestas
+### Capacidades MCP
 
-- `buscarLey`
-- `buscarJurisprudencia`
-- `obtenerDetalleJurisprudencia`
-- `buscarArticulosJurislex`
-- `obtenerDetalleArticuloJurislex`
+El servidor MCP ahora expone tres capas:
+
+- **Tools base** para espejo de la API: `health`, `healthDeep`, `buscarLey`, `buscarJurisprudencia`, `buscarJurisprudenciaAvanzada`, `obtenerDetalleJurisprudencia`, `buscarPrecedentes`, `buscarPrecedentesAvanzado`, `buscarDecretosJurislex`, `buscarArticulosJurislex`, `buscarArticulosJurislexAvanzado`, `obtenerDetalleArticuloJurislex`.
+- **Tools compuestas** para flujos utiles de agente: `resolverLeyPorNombre`, `buscarYDetallarJurisprudencia`, `buscarArticuloPorLeyYNumero`, `obtenerArticuloPorLeyYNumero`, `consultaJuridicaCompleta`.
+- **Resources y prompts MCP** para guiar clientes compatibles sin tener que adivinar el flujo correcto.
+
+`obtenerArticuloPorLeyYNumero` resuelve la ley por nombre, encuentra el articulo exacto y devuelve tambien el detalle completo del articulo.
+
+`consultaJuridicaCompleta` intenta decidir si la consulta debe resolverse como ley, articulo, jurisprudencia o precedente, y ejecuta el flujo base correspondiente.
+
+### Resources MCP disponibles
+
+- `ordina://readme`
+- `ordina://instrucciones-minimas`
+- `ordina://openapi/hub`
+- `ordina://catalogo/preview`
+
+### Prompts MCP disponibles
+
+- `consulta-juridica-segura`
+- `buscar-articulo`
+- `buscar-jurisprudencia`
 
 ### Configuracion ejemplo (cliente MCP)
 
@@ -258,6 +275,43 @@ Ejemplo de `command` y `args`:
   "args": ["/ruta/a/tu/repo/mcp_server.py"]
 }
 ```
+
+### Ejemplo Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "ordina-engine": {
+      "command": "python3",
+      "args": ["/ruta/a/tu/repo/mcp_server.py"]
+    }
+  }
+}
+```
+
+### Ejemplo Cursor
+
+Usa la misma idea: registrar un servidor MCP con `command` apuntando a `python3` y `args` apuntando a `mcp_server.py`.
+
+```json
+{
+  "mcpServers": {
+    "ordina-engine": {
+      "command": "python3",
+      "args": ["/ruta/a/tu/repo/mcp_server.py"]
+    }
+  }
+}
+```
+
+### Verificacion del MCP
+
+```bash
+python -m py_compile mcp_server.py api.py
+python -m unittest test_mcp_server.py
+```
+
+Los tests MCP cubren dispatcher puro y una prueba de integracion real por `stdio` contra `mcp_server.py`.
 
 ## ✅ Verificación automática
 
