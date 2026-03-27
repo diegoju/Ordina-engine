@@ -250,6 +250,8 @@ El servidor MCP ahora expone tres capas:
 
 `consultaJuridicaCompleta` intenta decidir si la consulta debe resolverse como ley, articulo, jurisprudencia o precedente, y ejecuta el flujo base correspondiente.
 
+Tambien intenta inferir `numeroArticulo` y una pista de `nombreLey` cuando vienen dentro del texto libre, y devuelve `summary`, `confidence` y `reasons` para que el cliente entienda por que eligio esa estrategia.
+
 ### Resources MCP disponibles
 
 - `ordina://readme`
@@ -311,7 +313,22 @@ python -m py_compile mcp_server.py api.py
 python -m unittest test_mcp_server.py
 ```
 
-Los tests MCP cubren dispatcher puro y una prueba de integracion real por `stdio` contra `mcp_server.py`.
+Los tests MCP cubren dispatcher puro, errores y edge cases con mocks, y pruebas de integracion real por `stdio` contra `mcp_server.py`.
+
+### Cliente de ejemplo
+
+Hay un ejemplo minimo en `repo/mcp_client_example.py` que:
+
+- inicia el servidor MCP como subprocess
+- ejecuta `initialize`
+- llama la tool `consultaJuridicaCompleta`
+- imprime la respuesta JSON-RPC completa
+
+Ejecutalo asi:
+
+```bash
+python mcp_client_example.py
+```
 
 ## ✅ Verificación automática
 

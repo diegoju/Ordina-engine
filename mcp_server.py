@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -90,6 +91,70 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
+def _extract_article_number(text: str) -> Optional[int]:
+    if not text:
+        return None
+    match = re.search(r"\bart(?:iculo|\.)?\s+(\d+)\b", text, flags=re.IGNORECASE)
+    if match:
+        return _safe_int(match.group(1), 0) or None
+    match = re.search(r"\b(\d+)\b", text)
+    if match:
+        return _safe_int(match.group(1), 0) or None
+    return None
+
+
+def _extract_law_hint(text: str) -> Optional[str]:
+    if not text:
+        return None
+    patterns = [
+        r"de la ([^.,;]+)",
+        r"del ([^.,;]+)",
+        r"en la ([^.,;]+)",
+        r"en el ([^.,;]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            candidate = match.group(1).strip()
+            if candidate:
+                return candidate
+    return None
+
+
+def _build_consulta_summary(strategy_used: str, result: Any) -> str:
+    if _result_is_error(result):
+        error = result["error"]
+        return f'Fallo la estrategia {strategy_used}: {error.get("code")} (status={error.get("status")})'
+
+    if not isinstance(result, dict):
+        return f"Consulta resuelta con estrategia {strategy_used}"
+
+    nested_raw = result.get("result") if isinstance(result.get("result"), dict) else result
+    nested = nested_raw if isinstance(nested_raw, dict) else {}
+
+    if strategy_used == "articulo":
+        selected_law = nested.get("selectedLaw") or {}
+        detail = nested.get("detail") or {}
+        if detail:
+            return (
+                f'Articulo localizado en {selected_law.get("nombre", "ley desconocida")}: '
+                f'{detail.get("titulo") or detail.get("idArticulo") or "detalle disponible"}'
+            )
+        return f'Busqueda de articulo en {selected_law.get("nombre", "ley desconocida")} sin detalle'
+
+    if strategy_used == "jurisprudencia":
+        selected = nested.get("selectedItem") or {}
+        return f'Jurisprudencia localizada con IUS {selected.get("ius", "?")}'
+
+    if strategy_used == "precedente":
+        return f'Precedentes localizados: {nested.get("count", 0)} coincidencias'
+
+    selected_law = nested.get("selectedLaw") or {}
+    if selected_law:
+        return f'Ley localizada: {selected_law.get("nombre", "sin nombre")}'
+    return f'Consulta resuelta con estrategia {strategy_used}'
+
+
 def _infer_consulta_strategy(
     consulta: str,
     estrategia: str,
@@ -110,6 +175,43 @@ def _infer_consulta_strategy(
     if any(token in consulta_norm for token in ["precedente", "precedentes", "ejecutoria", "ejecutorias"]):
         return "precedente"
     return "ley"
+
+
+def _infer_consulta_metadata(
+    consulta: str,
+    estrategia: str,
+    nombre_ley: Optional[str],
+    numero_articulo: Optional[int],
+) -> dict[str, Any]:
+    consulta_norm = (consulta or "").strip().lower()
+    inferred_numero = numero_articulo if numero_articulo is not None else _extract_article_number(consulta)
+    inferred_law = nombre_ley or _extract_law_hint(consulta)
+    strategy = _infer_consulta_strategy(consulta, estrategia, inferred_law, inferred_numero)
+
+    reasons = []
+    confidence = "media"
+    if strategy == "articulo":
+        if inferred_numero is not None:
+            reasons.append("Se detecto numero de articulo en la consulta")
+        if inferred_law:
+            reasons.append("Se detecto una pista de ley en la consulta")
+        confidence = "alta" if inferred_numero is not None else "media"
+    elif strategy == "jurisprudencia":
+        reasons.append("La consulta menciona terminos de jurisprudencia o tesis")
+        confidence = "alta"
+    elif strategy == "precedente":
+        reasons.append("La consulta menciona precedentes o ejecutorias")
+        confidence = "alta"
+    else:
+        reasons.append("Se usara resolucion de ley por nombre como estrategia base")
+
+    return {
+        "strategy": strategy,
+        "confidence": confidence,
+        "reasons": reasons,
+        "nombreLey": inferred_law,
+        "numeroArticulo": inferred_numero,
+    }
 
 
 def _read_text_file(path: Path) -> str:
@@ -155,7 +257,7 @@ def _summary_text(result: Any) -> str:
         return f'Jurisprudencia seleccionada IUS {item.get("ius", "?")}'
 
     if "strategyUsed" in result and "query" in result:
-        return f'Consulta resuelta con estrategia {result.get("strategyUsed")}'
+        return result.get("summary") or f'Consulta resuelta con estrategia {result.get("strategyUsed")}'
 
     if "items" in result and "count" in result:
         extra = []
@@ -453,26 +555,39 @@ def consulta_juridica_completa(
     matchIndex: int = 0,
     includeRaw: bool = False,
 ) -> Any:
-    strategy_used = _infer_consulta_strategy(consulta, estrategia, nombreLey, numeroArticulo)
+    metadata = _infer_consulta_metadata(consulta, estrategia, nombreLey, numeroArticulo)
+    strategy_used = metadata["strategy"]
+    resolved_nombre_ley = metadata["nombreLey"]
+    resolved_numero_articulo = metadata["numeroArticulo"]
 
     if strategy_used == "articulo":
-        if numeroArticulo is None:
-            return {
+        if resolved_numero_articulo is None:
+            response = {
                 "query": consulta,
                 "strategyUsed": strategy_used,
+                "confidence": metadata["confidence"],
+                "reasons": metadata["reasons"],
                 "warnings": ["Para estrategia de articulo necesitas `numeroArticulo` o una consulta mas estructurada"],
                 "result": None,
             }
+            response["summary"] = _build_consulta_summary(strategy_used, response)
+            return response
         result = obtener_articulo_por_ley_y_numero(
-            nombreLey=nombreLey or consulta,
-            numeroArticulo=numeroArticulo,
+            nombreLey=resolved_nombre_ley or consulta,
+            numeroArticulo=resolved_numero_articulo,
             includeRaw=includeRaw,
         )
-        return {
+        response = {
             "query": consulta,
             "strategyUsed": strategy_used,
+            "confidence": metadata["confidence"],
+            "reasons": metadata["reasons"],
+            "resolvedNombreLey": resolved_nombre_ley,
+            "resolvedNumeroArticulo": resolved_numero_articulo,
             "result": result,
         }
+        response["summary"] = _build_consulta_summary(strategy_used, response)
+        return response
 
     if strategy_used == "jurisprudencia":
         result = buscar_y_detallar_jurisprudencia(
@@ -480,26 +595,38 @@ def consulta_juridica_completa(
             matchIndex=matchIndex,
             includeRaw=includeRaw,
         )
-        return {
+        response = {
             "query": consulta,
             "strategyUsed": strategy_used,
+            "confidence": metadata["confidence"],
+            "reasons": metadata["reasons"],
             "result": result,
         }
+        response["summary"] = _build_consulta_summary(strategy_used, response)
+        return response
 
     if strategy_used == "precedente":
         result = buscar_precedentes(q=consulta, includeRaw=includeRaw)
-        return {
+        response = {
             "query": consulta,
             "strategyUsed": strategy_used,
+            "confidence": metadata["confidence"],
+            "reasons": metadata["reasons"],
             "result": result,
         }
+        response["summary"] = _build_consulta_summary(strategy_used, response)
+        return response
 
     law_matches = resolver_ley_por_nombre(nombreLey or consulta)
-    return {
+    response = {
         "query": consulta,
         "strategyUsed": strategy_used,
+        "confidence": metadata["confidence"],
+        "reasons": metadata["reasons"],
         "result": law_matches,
     }
+    response["summary"] = _build_consulta_summary(strategy_used, response)
+    return response
 
 
 TOOLS: dict[str, dict[str, Any]] = {

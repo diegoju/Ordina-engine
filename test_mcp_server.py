@@ -80,6 +80,8 @@ class McpServerTests(unittest.TestCase):
             )
         mocked.assert_called_once()
         self.assertEqual(result["strategyUsed"], "articulo")
+        self.assertEqual(result["resolvedNumeroArticulo"], 1)
+        self.assertEqual(result["confidence"], "alta")
         self.assertEqual(result["result"], fake_result)
 
     def test_obtener_articulo_por_ley_y_numero_adds_detail(self) -> None:
@@ -109,6 +111,42 @@ class McpServerTests(unittest.TestCase):
         result = mcp_server.consulta_juridica_completa(consulta="articulo constitucional", estrategia="articulo")
         self.assertEqual(result["strategyUsed"], "articulo")
         self.assertIn("numeroArticulo", result["warnings"][0])
+
+    def test_consulta_juridica_completa_infers_article_metadata(self) -> None:
+        fake_result = {"selectedLaw": {"nombre": "Constitucion"}, "detail": {"textoPlano": "detalle"}}
+        with patch.object(mcp_server, "obtener_articulo_por_ley_y_numero", return_value=fake_result):
+            result = mcp_server.consulta_juridica_completa(
+                consulta="Quiero el articulo 5 de la Ley Federal del Trabajo"
+            )
+        self.assertEqual(result["strategyUsed"], "articulo")
+        self.assertEqual(result["resolvedNumeroArticulo"], 5)
+        self.assertIn("Ley Federal del Trabajo", result["resolvedNombreLey"])
+
+    def test_consulta_juridica_completa_routes_to_precedente(self) -> None:
+        fake_result = {"count": 2, "items": [{"registroDigital": 1}, {"registroDigital": 2}]}
+        with patch.object(mcp_server, "buscar_precedentes", return_value=fake_result) as mocked:
+            result = mcp_server.consulta_juridica_completa(consulta="precedentes sobre libertad de expresion")
+        mocked.assert_called_once()
+        self.assertEqual(result["strategyUsed"], "precedente")
+        self.assertIn("Precedentes localizados", result["summary"])
+
+    def test_obtener_articulo_por_ley_y_numero_propagates_detail_error(self) -> None:
+        search_result = {
+            "count": 1,
+            "items": [{"idArticulo": 77, "numeroArticulo": "1"}],
+            "selectedLaw": {"id": 1000, "categoria": 2, "nombre": "Constitucion"},
+        }
+        detail_error = {"ok": False, "error": {"code": "UPSTREAM_UNAVAILABLE", "message": "boom", "status": 502}}
+        with patch.object(mcp_server, "buscar_articulo_por_ley_y_numero", return_value=search_result):
+            with patch.object(mcp_server, "obtener_detalle_articulo_jurislex", return_value=detail_error):
+                result = mcp_server.obtener_articulo_por_ley_y_numero("Constitucion", 1)
+        self.assertTrue(result["detail"]["ok"] is False)
+
+    def test_busqueda_jurisprudencia_propagates_upstream_error(self) -> None:
+        error_payload = {"ok": False, "error": {"code": "UPSTREAM_TIMEOUT", "message": "timeout", "status": 504}}
+        with patch.object(mcp_server, "buscar_jurisprudencia", return_value=error_payload):
+            result = mcp_server.buscar_y_detallar_jurisprudencia("amparo")
+        self.assertEqual(result["error"]["code"], "UPSTREAM_TIMEOUT")
 
 
 class McpServerStdioTests(unittest.TestCase):
@@ -157,6 +195,35 @@ class McpServerStdioTests(unittest.TestCase):
             names = {tool["name"] for tool in tools_response["result"]["tools"]}
             self.assertIn("consultaJuridicaCompleta", names)
             self.assertIn("obtenerArticuloPorLeyYNumero", names)
+        finally:
+            if process.stdin is not None:
+                process.stdin.close()
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+            process.terminate()
+            process.wait(timeout=5)
+
+    def test_stdio_resources_and_prompts(self) -> None:
+        process = subprocess.Popen(
+            [sys.executable, str(ROOT / "mcp_server.py")],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            _ = self._send_message(process, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+            resources = self._send_message(
+                process,
+                {"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}},
+            )
+            prompts = self._send_message(
+                process,
+                {"jsonrpc": "2.0", "id": 3, "method": "prompts/list", "params": {}},
+            )
+            self.assertIn("ordina://readme", {item["uri"] for item in resources["result"]["resources"]})
+            self.assertIn("consulta-juridica-segura", {item["name"] for item in prompts["result"]["prompts"]})
         finally:
             if process.stdin is not None:
                 process.stdin.close()
