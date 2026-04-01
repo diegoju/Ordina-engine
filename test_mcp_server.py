@@ -5,6 +5,7 @@ import unittest
 import json
 import subprocess
 from pathlib import Path
+from fastapi import HTTPException
 from unittest.mock import patch
 
 
@@ -13,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import mcp_server
+import mcp_http_server
 
 
 class McpServerTests(unittest.TestCase):
@@ -233,6 +235,31 @@ class McpServerStdioTests(unittest.TestCase):
                 process.stderr.close()
             process.terminate()
             process.wait(timeout=5)
+
+
+class McpHttpServerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        mcp_http_server.ACTIVE_SESSIONS.clear()
+
+    def test_initialize_creates_session_header(self) -> None:
+        messages, _ = mcp_http_server._normalize_messages(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        )
+        headers = mcp_http_server._session_headers(messages)
+        self.assertIn(mcp_http_server.SESSION_HEADER, headers)
+        self.assertIn(headers[mcp_http_server.SESSION_HEADER], mcp_http_server.ACTIVE_SESSIONS)
+
+    def test_non_initialize_requires_existing_session(self) -> None:
+        with self.assertRaises(HTTPException) as ctx:
+            mcp_http_server._ensure_session("invalida", initialize_only=False)
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_collect_responses_returns_jsonrpc_result(self) -> None:
+        responses = mcp_http_server._collect_responses(
+            [{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}]
+        )
+        self.assertEqual(responses[0]["jsonrpc"], "2.0")
+        self.assertIn("tools", responses[0]["result"])
 
 
 if __name__ == "__main__":

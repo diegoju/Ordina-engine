@@ -1067,44 +1067,50 @@ def _dispatch(method: str, params: dict[str, Any]) -> Any:
     raise NotImplementedError(f"Metodo no soportado: {method}")
 
 
+def _handle_jsonrpc_message(message: dict[str, Any]) -> Optional[dict[str, Any]]:
+    method = message.get("method")
+    request_id = message.get("id")
+
+    if not method:
+        if request_id is not None:
+            return _err(request_id, -32600, "Invalid Request")
+        return None
+
+    if method == "notifications/initialized":
+        return None
+
+    params_raw = message.get("params")
+    params: dict[str, Any] = params_raw if isinstance(params_raw, dict) else {}
+
+    if request_id is None:
+        try:
+            _dispatch(str(method), params)
+        except Exception:
+            pass
+        return None
+
+    try:
+        result = _dispatch(str(method), params)
+        return _ok(request_id, result)
+    except NotImplementedError as exc:
+        return _err(request_id, -32601, str(exc))
+    except TypeError as exc:
+        return _err(request_id, -32602, "Parametros invalidos", str(exc))
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:
+        return _err(request_id, -32000, "Error interno", str(exc))
+
+
 def run_stdio_server() -> None:
     while True:
         message = _read_message()
         if message is None:
             break
 
-        method = message.get("method")
-        request_id = message.get("id")
-
-        if not method:
-            if request_id is not None:
-                _write_message(_err(request_id, -32600, "Invalid Request"))
-            continue
-
-        if method == "notifications/initialized":
-            continue
-
-        params_raw = message.get("params")
-        params: dict[str, Any] = params_raw if isinstance(params_raw, dict) else {}
-
-        if request_id is None:
-            try:
-                _dispatch(str(method), params)
-            except Exception:
-                pass
-            continue
-
-        try:
-            result = _dispatch(str(method), params)
-            _write_message(_ok(request_id, result))
-        except NotImplementedError as exc:
-            _write_message(_err(request_id, -32601, str(exc)))
-        except TypeError as exc:
-            _write_message(_err(request_id, -32602, "Parametros invalidos", str(exc)))
-        except ValueError as exc:
-            _write_message(_err(request_id, -32602, str(exc)))
-        except Exception as exc:
-            _write_message(_err(request_id, -32000, "Error interno", str(exc)))
+        response = _handle_jsonrpc_message(message)
+        if response is not None:
+            _write_message(response)
 
 
 if __name__ == "__main__":
