@@ -230,6 +230,28 @@ def _resource_catalog_preview(limit: int = 25) -> str:
     return "\n".join(rows)
 
 
+def _resource_flow_guide() -> str:
+    return (
+        "Flujos recomendados de Ordina-engine\n\n"
+        "1. Catalogo de leyes\n"
+        "- Usa `buscarLey` para localizar una ley por nombre, id o categoria.\n"
+        "- Si vas a consultar Jurislex, toma de ahi `idLegislacion` y `categoria`.\n\n"
+        "2. Jurisprudencia SJF\n"
+        "- Primero usa `buscarJurisprudencia` con `size=10`, `page=0`, `includeRaw=false`.\n"
+        "- Luego usa `obtenerDetalleJurisprudencia` con el `ius` elegido.\n"
+        "- Si la persona pide el texto completo, muestra `textoPlano` del detalle.\n\n"
+        "3. Articulos Jurislex\n"
+        "- No llames `buscarArticulosJurislex` solo con nombre de ley.\n"
+        "- Primero resuelve `idLegislacion` y `categoria` con `buscarLey`.\n"
+        "- Luego usa `buscarArticulosJurislex` con `elementos=20`, `indice=0`, `includeRaw=false`.\n"
+        "- Finalmente usa `obtenerDetalleArticuloJurislex` con `categoria`, `idLegislacion` e `idArticulo`.\n"
+        "- Si el articulo tiene formato especial como 167-B, conviene buscar primero por el numero base.\n\n"
+        "4. Precedentes SCJN\n"
+        "- Usa `buscarPrecedentes` para localizar ejecutorias o precedentes.\n"
+        "- Si no hay resultados, indicalo claramente y no inventes datos.\n"
+    )
+
+
 def _summary_text(result: Any) -> str:
     if _result_is_error(result):
         error = result["error"]
@@ -270,7 +292,17 @@ def _summary_text(result: Any) -> str:
         return ", ".join(extra) if extra else "Operacion completada"
 
     if "titulo" in result and "textoPlano" in result:
-        return f'Detalle obtenido: {result.get("titulo") or result.get("rubro") or "sin titulo"}'
+        title = result.get("titulo") or result.get("rubro") or "sin titulo"
+        metadata = []
+        if result.get("ius") is not None:
+            metadata.append(f'IUS {result.get("ius")}')
+        if result.get("fechaPublicacion"):
+            metadata.append(f'fecha {result.get("fechaPublicacion")}')
+        header = f"Detalle obtenido: {title}"
+        if metadata:
+            header = f"{header} ({', '.join(metadata)})"
+        texto = str(result.get("textoPlano") or result.get("texto") or "").strip()
+        return f"{header}\n\n{texto}" if texto else header
 
     return json.dumps(result, ensure_ascii=False)
 
@@ -641,7 +673,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": health_profundo,
     },
     "buscarLey": {
-        "description": "Busca leyes por id, categoria o nombre parcial.",
+        "description": "Busca leyes por id, categoria o nombre parcial. Usa esta tool primero cuando necesites consultar Jurislex, porque de aqui salen `idLegislacion` y `categoria`.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -654,7 +686,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_ley,
     },
     "resolverLeyPorNombre": {
-        "description": "Resuelve la ley mas probable por nombre y devuelve mejores coincidencias.",
+        "description": "Resuelve la ley mas probable por nombre y devuelve mejores coincidencias. Es util cuando la persona menciona una ley en lenguaje natural y necesitas preparar una consulta posterior a Jurislex.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -667,7 +699,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": resolver_ley_por_nombre,
     },
     "buscarJurisprudencia": {
-        "description": "Busca jurisprudencia SJF con parametros recomendados para agentes.",
+        "description": "Busca jurisprudencia SJF y devuelve matches resumidos. Usala para localizar uno o varios IUS; si la persona pide el texto completo de una tesis o jurisprudencia, despues debes llamar `obtenerDetalleJurisprudencia` con el `ius` elegido.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -696,7 +728,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_jurisprudencia_avanzada,
     },
     "obtenerDetalleJurisprudencia": {
-        "description": "Obtiene detalle de jurisprudencia por IUS.",
+        "description": "Obtiene el detalle de jurisprudencia por IUS. Esta es la tool correcta cuando la persona pide el texto completo de una tesis, jurisprudencia o criterio. La respuesta incluye `texto` y `textoPlano`; prioriza `textoPlano` al citar o mostrar el contenido completo.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -711,7 +743,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": obtener_detalle_jurisprudencia,
     },
     "buscarYDetallarJurisprudencia": {
-        "description": "Busca jurisprudencia y trae el detalle del mejor match o del indice pedido.",
+        "description": "Busca jurisprudencia y trae el detalle del mejor match o del indice pedido. Usala cuando la consulta venga en lenguaje natural y quieras resolver busqueda + detalle en un solo paso. Si el usuario pide texto completo, toma el contenido desde `detail.textoPlano`.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -728,7 +760,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_y_detallar_jurisprudencia,
     },
     "buscarPrecedentes": {
-        "description": "Busca precedentes o ejecutorias SCJN.",
+        "description": "Busca precedentes o ejecutorias SCJN y devuelve resultados resumidos. Usala para localizar asuntos; si no hay resultados, indicalo claramente.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -759,7 +791,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_precedentes_avanzado,
     },
     "buscarDecretosJurislex": {
-        "description": "Obtiene decretos y anexos Jurislex por legislacion.",
+        "description": "Obtiene decretos y anexos Jurislex por legislacion. Normalmente debes resolver antes `idLegislacion` con `buscarLey`.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -772,7 +804,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_decretos_jurislex,
     },
     "buscarArticulosJurislex": {
-        "description": "Busca articulos Jurislex por categoria e idLegislacion.",
+        "description": "Busca articulos Jurislex por `categoria` e `idLegislacion`. No la uses solo con nombre de ley: primero llama `buscarLey`. Parametros recomendados: `elementos=20`, `indice=0`, `includeRaw=false` salvo solicitud expresa.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -791,7 +823,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_articulos_jurislex,
     },
     "buscarArticulosJurislexAvanzado": {
-        "description": "Ejecuta busqueda avanzada Jurislex con body completo.",
+        "description": "Ejecuta busqueda avanzada Jurislex con body completo. Usala solo si el flujo simple con `buscarLey` y `buscarArticulosJurislex` no es suficiente.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -803,7 +835,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_articulos_jurislex_avanzado,
     },
     "obtenerDetalleArticuloJurislex": {
-        "description": "Obtiene detalle de un articulo Jurislex por idArticulo.",
+        "description": "Obtiene detalle de un articulo Jurislex por `idArticulo`. Debe usarse despues de `buscarArticulosJurislex`, conservando `categoria` e `idLegislacion` de la misma ley seleccionada.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -818,7 +850,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": obtener_detalle_articulo_jurislex,
     },
     "buscarArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre y busca articulos exactos por numero.",
+        "description": "Resuelve una ley por nombre y busca articulos exactos por numero. Es la opcion mas segura cuando la persona pide un articulo de una ley pero no conoce `categoria` ni `idLegislacion`.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -833,7 +865,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_articulo_por_ley_y_numero,
     },
     "obtenerArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo.",
+        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo. Es la mejor tool para 'dame el texto del articulo X de la ley Y'.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -848,7 +880,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": obtener_articulo_por_ley_y_numero,
     },
     "consultaJuridicaCompleta": {
-        "description": "Decide si conviene consultar leyes, articulos, jurisprudencia o precedentes y ejecuta el flujo base.",
+        "description": "Decide si conviene consultar leyes, articulos, jurisprudencia o precedentes y ejecuta el flujo base. Usala cuando la consulta venga en lenguaje natural y no quieras decidir manualmente el flujo correcto.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -892,6 +924,12 @@ RESOURCES: dict[str, dict[str, Any]] = {
         "mimeType": "text/plain",
         "loader": _resource_catalog_preview,
     },
+    "ordina://guia-flujos": {
+        "name": "Guia de flujos Ordina",
+        "description": "Como usar correctamente leyes, SJF, Jurislex y precedentes en MCP.",
+        "mimeType": "text/plain",
+        "loader": _resource_flow_guide,
+    },
 }
 
 
@@ -903,7 +941,7 @@ PROMPTS: dict[str, dict[str, Any]] = {
             "Usa Ordina-engine con este flujo: 1) si quieres delegar la decision inicial, usa consultaJuridicaCompleta; "
             "2) si la consulta menciona una ley, primero usa buscarLey "
             "o resolverLeyPorNombre; 2) para articulos usa buscarArticuloPorLeyYNumero o buscarArticulosJurislex; "
-            "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; "
+            "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; si piden texto completo de una tesis, no te quedes en el resumen de busqueda y muestra `textoPlano` del detalle; "
             "4) para precedentes usa buscarPrecedentes; 5) si no hay resultados, dilo claramente y no inventes datos."
         ),
     },
@@ -923,7 +961,38 @@ PROMPTS: dict[str, dict[str, Any]] = {
         "arguments": [{"name": "tema", "required": True}],
         "builder": lambda args: (
             f'Busca jurisprudencia SJF sobre "{args.get("tema")}" con size=10 y page=0. '
-            "Resume primero los mejores resultados y despues trae detalle del match mas relevante."
+            "Resume primero los mejores resultados y despues trae detalle del match mas relevante. Si la persona pide el texto completo, muestra `textoPlano` de la respuesta de detalle."
+        ),
+    },
+    "usar-jurislex-correctamente": {
+        "description": "Prompt guiado para no saltarse pasos en Jurislex.",
+        "arguments": [
+            {"name": "nombreLey", "required": True},
+            {"name": "numeroArticulo", "required": False},
+        ],
+        "builder": lambda args: (
+            f'Para consultar Jurislex sobre la ley "{args.get("nombreLey")}", primero usa buscarLey para resolver `idLegislacion` y `categoria`. '
+            "Despues usa buscarArticulosJurislex con `elementos=20`, `indice=0`, `includeRaw=false`. "
+            "Si necesitas texto completo de un articulo, usa obtenerDetalleArticuloJurislex con el `idArticulo` elegido. "
+            + (
+                f'Si buscas el articulo {args.get("numeroArticulo")}, tambien puedes usar obtenerArticuloPorLeyYNumero para resolver todo el flujo en una sola tool.'
+                if args.get("numeroArticulo") not in (None, "")
+                else ""
+            )
+        ),
+    },
+    "texto-completo-jurisprudencia": {
+        "description": "Prompt guiado para traer el texto completo de una tesis o jurisprudencia.",
+        "arguments": [
+            {"name": "tema", "required": False},
+            {"name": "ius", "required": False},
+        ],
+        "builder": lambda args: (
+            (
+                f'Obtiene el texto completo de la tesis con IUS {args.get("ius")}. Usa obtenerDetalleJurisprudencia y muestra `textoPlano` completo.'
+                if args.get("ius") not in (None, "")
+                else f'Busca jurisprudencia SJF sobre "{args.get("tema")}" con size=10 y page=0, elige el mejor IUS y despues usa obtenerDetalleJurisprudencia para mostrar `textoPlano` completo.'
+            )
         ),
     },
 }
