@@ -2,6 +2,7 @@ from fastapi import Body, FastAPI, Query
 import json
 import html
 import re
+import unicodedata
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -34,6 +35,13 @@ def _parse_bool(value, default=False):
     if value is None:
         return default
     return str(value).lower() == "true"
+
+
+def _normalize_text(value: str) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text
 
 
 def _default_sjf_payload(q: str):
@@ -945,5 +953,16 @@ def buscar_ley(id: Optional[int] = None, categoria: Optional[int] = None, nombre
     if categoria is not None:
         resultados = [l for l in resultados if l["categoria"] == categoria]
     if nombre is not None:
-        resultados = [l for l in resultados if nombre.lower() in l["nombre"].lower()]
+        nombre_norm = _normalize_text(nombre)
+        tokens = [token for token in nombre_norm.split(" ") if token]
+
+        def matches(item):
+            item_norm = _normalize_text(item.get("nombre", ""))
+            if not item_norm:
+                return False
+            if nombre_norm and nombre_norm in item_norm:
+                return True
+            return bool(tokens) and all(token in item_norm for token in tokens)
+
+        resultados = [l for l in resultados if matches(l)]
     return JSONResponse(content=resultados)

@@ -15,9 +15,22 @@ if str(ROOT) not in sys.path:
 
 import mcp_server
 import mcp_http_server
+import api
 
 
 class McpServerTests(unittest.TestCase):
+    def test_buscar_ley_matches_oaxaca_with_partial_tokens(self) -> None:
+        result = api.buscar_ley(nombre="penal Oaxaca")
+        payload = json.loads(bytes(result.body).decode("utf-8"))
+        names = {item["nombre"] for item in payload}
+        self.assertIn("Código Penal para el Estado Libre y Soberano de Oaxaca", names)
+
+    def test_buscar_ley_matches_oaxaca_without_accents(self) -> None:
+        result = api.buscar_ley(nombre="Codigo Penal para el Estado de Oaxaca")
+        payload = json.loads(bytes(result.body).decode("utf-8"))
+        names = {item["nombre"] for item in payload}
+        self.assertIn("Código Penal para el Estado Libre y Soberano de Oaxaca", names)
+
     def test_initialize_exposes_tools_resources_and_prompts(self) -> None:
         result = mcp_server._dispatch("initialize", {})
         self.assertEqual(result["protocolVersion"], "2024-11-05")
