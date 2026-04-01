@@ -37,6 +37,7 @@ class McpServerTests(unittest.TestCase):
         uris = {resource["uri"] for resource in result["resources"]}
         self.assertIn("ordina://readme", uris)
         self.assertIn("ordina://openapi/hub", uris)
+        self.assertIn("ordina://guia-flujos", uris)
 
     def test_prompts_get_returns_message(self) -> None:
         result = mcp_server._dispatch(
@@ -45,6 +46,24 @@ class McpServerTests(unittest.TestCase):
         )
         self.assertEqual(result["messages"][0]["role"], "user")
         self.assertIn("articulo 1", result["messages"][0]["content"]["text"])
+
+    def test_prompts_list_contains_flow_specific_prompts(self) -> None:
+        result = mcp_server._dispatch("prompts/list", {})
+        names = {prompt["name"] for prompt in result["prompts"]}
+        self.assertIn("usar-jurislex-correctamente", names)
+        self.assertIn("texto-completo-jurisprudencia", names)
+
+    def test_tool_success_includes_full_text_for_jurisprudencia_detail(self) -> None:
+        result = mcp_server._tool_success(
+            {
+                "ius": 2030687,
+                "titulo": "DERECHO HUMANO AL AGUA",
+                "fechaPublicacion": "2024-01-01",
+                "textoPlano": "Texto completo de la tesis.",
+            }
+        )
+        self.assertIn("DERECHO HUMANO AL AGUA", result["content"][0]["text"])
+        self.assertIn("Texto completo de la tesis.", result["content"][0]["text"])
 
     def test_tools_call_marks_error_when_wrapper_returns_error(self) -> None:
         with patch.object(
