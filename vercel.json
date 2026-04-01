@@ -2,11 +2,10 @@
   "version": 2,
   "builds": [
     { "src": "api.py", "use": "@vercel/python" },
-    { "src": "mcp_http_server.py", "use": "@vercel/python" }
+    { "src": "api/*.py", "use": "@vercel/python" }
   ],
   "routes": [
-    { "src": "/mcp", "dest": "mcp_http_server.py" },
-    { "src": "/mcp/(.*)", "dest": "mcp_http_server.py" },
+    { "src": "/mcp", "dest": "/api/mcp.py" },
     { "src": "/(.*)", "dest": "api.py" }
   ]
 }
