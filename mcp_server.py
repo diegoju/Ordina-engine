@@ -110,10 +110,11 @@ def _article_matches_number(item: dict[str, Any], numero_articulo: int) -> bool:
 def _extract_article_number(text: str) -> Optional[int]:
     if not text:
         return None
-    match = re.search(r"\bart(?:iculo|\.)?\s+(\d+)\b", text, flags=re.IGNORECASE)
+    text_norm = _normalize_match_text(text)
+    match = re.search(r"\bart(?:iculo|\.)?\s+(\d+)\b", text_norm, flags=re.IGNORECASE)
     if match:
         return _safe_int(match.group(1), 0) or None
-    match = re.search(r"\b(\d+)\b", text)
+    match = re.search(r"\b(\d+)\b", text_norm)
     if match:
         return _safe_int(match.group(1), 0) or None
     return None
@@ -132,7 +133,7 @@ def _extract_law_hint(text: str) -> Optional[str]:
         r"en el ([^.,;]+)",
     ]
     for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
+        match = re.search(pattern, text_norm, flags=re.IGNORECASE)
         if match:
             candidate = match.group(1).strip()
             if candidate:
@@ -143,8 +144,13 @@ def _extract_law_hint(text: str) -> Optional[str]:
 def _clean_article_query(text: str) -> str:
     if not text:
         return ""
-    cleaned = re.sub(r"\bart(?:iculo|\.)?\s+\d+[a-zA-Z-]*\b", " ", text, flags=re.IGNORECASE)
+    cleaned = _normalize_match_text(text)
+    cleaned = re.sub(r"\bart(?:iculo|\.)?\s+\d+[a-zA-Z-]*\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(primer|segundo|tercer|tercero|cuarto|quinto)\s+parrafo\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bdame\b", " ", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:-")
+    cleaned = re.sub(r"^(?:el|la|los|las)\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^(?:del|de la|de los|de las)\s+", "", cleaned, flags=re.IGNORECASE)
     return cleaned
 
 
@@ -192,7 +198,7 @@ def _infer_consulta_strategy(
     if estrategia_norm in {"ley", "articulo", "jurisprudencia", "precedente"}:
         return estrategia_norm
 
-    consulta_norm = (consulta or "").strip().lower()
+    consulta_norm = _normalize_match_text(consulta)
     if numero_articulo is not None or nombre_ley:
         return "articulo"
     if any(token in consulta_norm for token in ["articulo ", "art. ", "art "]):
@@ -210,9 +216,9 @@ def _infer_consulta_metadata(
     nombre_ley: Optional[str],
     numero_articulo: Optional[int],
 ) -> dict[str, Any]:
-    consulta_norm = (consulta or "").strip().lower()
     inferred_numero = numero_articulo if numero_articulo is not None else _extract_article_number(consulta)
-    inferred_law = nombre_ley or _extract_law_hint(consulta)
+    cleaned_query = _clean_article_query(consulta)
+    inferred_law = nombre_ley or _extract_law_hint(cleaned_query)
     strategy = _infer_consulta_strategy(consulta, estrategia, inferred_law, inferred_numero)
 
     reasons = []
@@ -295,6 +301,22 @@ def _summary_text(result: Any) -> str:
 
     if "status" in result and "checks" in result:
         return f'Health profundo {result.get("status")} con {len(result.get("checks") or [])} checks'
+
+    detail = result.get("detail") if isinstance(result.get("detail"), dict) else None
+    if detail and "textoPlano" in detail:
+        selected = result.get("selectedLaw") or {}
+        selected_item = result.get("selectedItem") or {}
+        title = detail.get("titulo") or detail.get("rubro") or "sin titulo"
+        header_parts = []
+        if selected.get("nombre"):
+            header_parts.append(str(selected.get("nombre")))
+        if selected_item.get("numeroArticulo") is not None:
+            header_parts.append(f'Artículo {selected_item.get("numeroArticulo")}')
+        header = " - ".join(header_parts) if header_parts else f"Detalle obtenido: {title}"
+        texto = str(detail.get("textoPlano") or detail.get("texto") or "").strip()
+        if title and title != "sin titulo":
+            header = f"{header}\n{title}" if header_parts else f"Detalle obtenido: {title}"
+        return f"{header}\n\n{texto}" if texto else header
 
     if "selectedLaw" in result:
         selected = result.get("selectedLaw") or {}
