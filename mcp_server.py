@@ -65,21 +65,33 @@ def _law_matches(nombre: str) -> list[dict[str, Any]]:
     return result
 
 
+def _normalize_match_text(value: Any) -> str:
+    return ordina_api._normalize_text(str(value or ""))
+
+
 def _rank_laws(nombre: str, leyes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    nombre_norm = (nombre or "").strip().lower()
+    nombre_norm = _normalize_match_text(nombre)
     if not nombre_norm:
         return leyes
 
+    query_tokens = [token for token in nombre_norm.split(" ") if token]
+    whole_query_pattern = re.compile(rf"\b{re.escape(nombre_norm)}\b")
+
     def score(item: dict[str, Any]) -> tuple[int, int, str]:
         law_name = str(item.get("nombre") or "")
-        law_norm = law_name.lower()
+        law_norm = _normalize_match_text(law_name)
+        token_count = sum(1 for token in query_tokens if re.search(rf"\b{re.escape(token)}\b", law_norm))
         if law_norm == nombre_norm:
             return (0, len(law_name), law_norm)
-        if law_norm.startswith(nombre_norm):
+        if law_norm.startswith(f"{nombre_norm} "):
             return (1, len(law_name), law_norm)
-        if nombre_norm in law_norm:
+        if whole_query_pattern.search(law_norm):
             return (2, len(law_name), law_norm)
-        return (3, len(law_name), law_norm)
+        if query_tokens and token_count == len(query_tokens):
+            return (3, len(law_name), law_norm)
+        if nombre_norm in law_norm:
+            return (4, len(law_name), law_norm)
+        return (5, -token_count, len(law_name), law_norm)
 
     return sorted(leyes, key=score)
 
@@ -89,6 +101,10 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _article_matches_number(item: dict[str, Any], numero_articulo: int) -> bool:
+    return _safe_int(item.get("numeroArticulo"), -1) == int(numero_articulo)
 
 
 def _extract_article_number(text: str) -> Optional[int]:
@@ -106,6 +122,9 @@ def _extract_article_number(text: str) -> Optional[int]:
 def _extract_law_hint(text: str) -> Optional[str]:
     if not text:
         return None
+    text_norm = _normalize_match_text(text)
+    if re.search(r"\bconstitucion(?: politica)?\b|\bconstitucional\b", text_norm):
+        return "constitucion"
     patterns = [
         r"de la ([^.,;]+)",
         r"del ([^.,;]+)",
@@ -119,6 +138,14 @@ def _extract_law_hint(text: str) -> Optional[str]:
             if candidate:
                 return candidate
     return None
+
+
+def _clean_article_query(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"\bart(?:iculo|\.)?\s+\d+[a-zA-Z-]*\b", " ", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:-")
+    return cleaned
 
 
 def _build_consulta_summary(strategy_used: str, result: Any) -> str:
@@ -520,12 +547,35 @@ def buscar_articulo_por_ley_y_numero(
         )
         if _result_is_error(search):
             return search
+        items = search.get("items", []) if isinstance(search, dict) else []
+        if not items:
+            fallback_search = buscar_articulos_jurislex(
+                categoria=int(categoria),
+                idLegislacion=int(id_legislacion),
+                desc=str(numeroArticulo),
+                soloArticulo=True,
+                elementos=20,
+                includeRaw=includeRaw,
+            )
+            if _result_is_error(fallback_search):
+                return fallback_search
+            if isinstance(fallback_search, dict):
+                fallback_items = fallback_search.get("items", [])
+                exact_items = [item for item in fallback_items if _article_matches_number(item, numeroArticulo)]
+                if exact_items:
+                    return {
+                        "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
+                        "selectedLaw": ley,
+                        "count": len(exact_items),
+                        "items": exact_items,
+                        "topLawMatches": leyes,
+                    }
         if isinstance(search, dict) and search.get("count", 0) > 0:
             return {
                 "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
                 "selectedLaw": ley,
                 "count": search.get("count", 0),
-                "items": search.get("items", []),
+                "items": items,
                 "topLawMatches": leyes,
             }
 
@@ -604,8 +654,9 @@ def consulta_juridica_completa(
             }
             response["summary"] = _build_consulta_summary(strategy_used, response)
             return response
+        article_law_query = resolved_nombre_ley or _clean_article_query(consulta) or consulta
         result = obtener_articulo_por_ley_y_numero(
-            nombreLey=resolved_nombre_ley or consulta,
+            nombreLey=article_law_query,
             numeroArticulo=resolved_numero_articulo,
             includeRaw=includeRaw,
         )
@@ -673,7 +724,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": health_profundo,
     },
     "buscarLey": {
-        "description": "Busca leyes por id, categoria o nombre parcial. Usa esta tool primero cuando necesites consultar Jurislex, porque de aqui salen `idLegislacion` y `categoria`.",
+        "description": "Busca leyes por id, categoria o nombre parcial. Usa esta tool primero cuando necesites consultar Jurislex, porque de aqui salen `idLegislacion` y `categoria`. Si la consulta menciona una entidad como Oaxaca, primero busca por la entidad y revisa las coincidencias del catalogo antes de concluir que la ley no existe.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -686,7 +737,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_ley,
     },
     "resolverLeyPorNombre": {
-        "description": "Resuelve la ley mas probable por nombre y devuelve mejores coincidencias. Es util cuando la persona menciona una ley en lenguaje natural y necesitas preparar una consulta posterior a Jurislex.",
+        "description": "Resuelve la ley mas probable por nombre y devuelve mejores coincidencias. Es util cuando la persona menciona una ley en lenguaje natural y necesitas preparar una consulta posterior a Jurislex. Si devuelve varias coincidencias para una entidad federativa, elige primero la que corresponda al codigo o ley pedida antes de salirte a fuentes externas.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -850,7 +901,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": obtener_detalle_articulo_jurislex,
     },
     "buscarArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre y busca articulos exactos por numero. Es la opcion mas segura cuando la persona pide un articulo de una ley pero no conoce `categoria` ni `idLegislacion`.",
+        "description": "Resuelve una ley por nombre y busca articulos exactos por numero. Es la opcion mas segura cuando la persona pide un articulo de una ley pero no conoce `categoria` ni `idLegislacion`, por ejemplo 'articulo 1 del Codigo Penal de Oaxaca'.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -865,7 +916,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_articulo_por_ley_y_numero,
     },
     "obtenerArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo. Es la mejor tool para 'dame el texto del articulo X de la ley Y'.",
+        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo. Es la mejor tool para 'dame el texto del articulo X de la ley Y'. Si el catalogo devuelve coincidencias para la entidad o materia pedida, usa esta tool antes de intentar web u otras fuentes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -942,7 +993,7 @@ PROMPTS: dict[str, dict[str, Any]] = {
             "2) si la consulta menciona una ley, primero usa buscarLey "
             "o resolverLeyPorNombre; 2) para articulos usa buscarArticuloPorLeyYNumero o buscarArticulosJurislex; "
             "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; si piden texto completo de una tesis, no te quedes en el resumen de busqueda y muestra `textoPlano` del detalle; "
-            "4) para precedentes usa buscarPrecedentes; 5) si no hay resultados, dilo claramente y no inventes datos."
+            "4) para precedentes usa buscarPrecedentes; 5) si buscarLey devuelve coincidencias utiles del catalogo, no saltes a web todavia; 6) si no hay resultados, dilo claramente y no inventes datos."
         ),
     },
     "buscar-articulo": {
@@ -953,7 +1004,14 @@ PROMPTS: dict[str, dict[str, Any]] = {
         ],
         "builder": lambda args: (
             f'Busca el articulo {args.get("numeroArticulo")} de la ley "{args.get("nombreLey")}". '
-            "Primero resuelve la ley por nombre y luego usa obtenerArticuloPorLeyYNumero para traer el detalle completo."
+            "Primero resuelve la ley por nombre y luego usa obtenerArticuloPorLeyYNumero para traer el detalle completo. Si el nombre de la ley incluye una entidad federativa, revisa primero las coincidencias del catalogo antes de concluir que la ley no existe."
+        ),
+    },
+    "resolver-ley-estatal": {
+        "description": "Prompt guiado para encontrar el id y categoria de una ley estatal en el catalogo.",
+        "arguments": [{"name": "consulta", "required": True}],
+        "builder": lambda args: (
+            f'Para la consulta "{args.get("consulta")}", primero usa buscarLey con la entidad o palabras clave principales. Revisa las coincidencias del catalogo y selecciona la ley correcta con su `id` y `categoria`. Si encuentras una coincidencia razonable en Ordina, no saltes a web antes de intentar el flujo Jurislex correspondiente.'
         ),
     },
     "buscar-jurisprudencia": {

@@ -31,6 +31,19 @@ class McpServerTests(unittest.TestCase):
         names = {item["nombre"] for item in payload}
         self.assertIn("Código Penal para el Estado Libre y Soberano de Oaxaca", names)
 
+    def test_resolver_ley_por_nombre_prioritizes_constitucion_real(self) -> None:
+        result = mcp_server.resolver_ley_por_nombre("constitucion")
+        selected = result["selectedLaw"] or {}
+        self.assertEqual(selected.get("id"), 1000)
+
+    def test_consulta_juridica_completa_cleans_article_query_when_law_hint_missing(self) -> None:
+        fake_result = {"selectedLaw": {"id": 6048, "nombre": "Código Penal para el Estado Libre y Soberano de Oaxaca"}}
+        with patch.object(mcp_server, "obtener_articulo_por_ley_y_numero", return_value=fake_result) as mocked:
+            result = mcp_server.consulta_juridica_completa(consulta="codigo penal oaxaca articulo 1")
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["nombreLey"], "codigo penal oaxaca")
+        self.assertEqual(result["strategyUsed"], "articulo")
+
     def test_initialize_exposes_tools_resources_and_prompts(self) -> None:
         result = mcp_server._dispatch("initialize", {})
         self.assertEqual(result["protocolVersion"], "2024-11-05")
@@ -65,6 +78,7 @@ class McpServerTests(unittest.TestCase):
         names = {prompt["name"] for prompt in result["prompts"]}
         self.assertIn("usar-jurislex-correctamente", names)
         self.assertIn("texto-completo-jurisprudencia", names)
+        self.assertIn("resolver-ley-estatal", names)
 
     def test_tool_success_includes_full_text_for_jurisprudencia_detail(self) -> None:
         result = mcp_server._tool_success(
@@ -132,6 +146,23 @@ class McpServerTests(unittest.TestCase):
         mocked_detail.assert_called_once()
         self.assertEqual(result["selectedItem"]["idArticulo"], 77)
         self.assertEqual(result["detail"]["textoPlano"], "detalle del articulo")
+
+    def test_buscar_articulo_por_ley_y_numero_uses_broad_fallback_when_exact_filter_fails(self) -> None:
+        exact_empty = {"count": 0, "items": []}
+        broad_result = {
+            "count": 2,
+            "items": [
+                {"idArticulo": 10, "numeroArticulo": 1},
+                {"idArticulo": 20, "numeroArticulo": 2},
+            ],
+        }
+        with patch.object(mcp_server, "_law_matches", return_value=[{"id": 1000, "categoria": 1000, "nombre": "Constitución"}]):
+            with patch.object(mcp_server, "buscar_articulos_jurislex", side_effect=[exact_empty, broad_result]) as mocked_search:
+                result = mcp_server.buscar_articulo_por_ley_y_numero("constitucion", 1)
+        self.assertEqual(mocked_search.call_count, 2)
+        self.assertEqual(result["selectedLaw"]["id"], 1000)
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["items"][0]["idArticulo"], 10)
 
     def test_consulta_juridica_completa_routes_to_jurisprudencia(self) -> None:
         fake_result = {"selectedItem": {"ius": 12345}, "detail": {"ius": 12345}}
