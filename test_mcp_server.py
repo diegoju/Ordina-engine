@@ -92,6 +92,21 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("DERECHO HUMANO AL AGUA", result["content"][0]["text"])
         self.assertIn("Texto completo de la tesis.", result["content"][0]["text"])
 
+    def test_tool_success_includes_article_detail_text_for_composite_result(self) -> None:
+        result = mcp_server._tool_success(
+            {
+                "selectedLaw": {"nombre": "Código Penal para el Estado Libre y Soberano de Oaxaca"},
+                "selectedItem": {"numeroArticulo": 8},
+                "detail": {
+                    "titulo": "CAPÍTULO ÚNICO.",
+                    "textoPlano": "Artículo 8. Cuando se realice una conducta prevista como delito...",
+                },
+            }
+        )
+        self.assertIn("Código Penal para el Estado Libre y Soberano de Oaxaca", result["content"][0]["text"])
+        self.assertIn("Artículo 8", result["content"][0]["text"])
+        self.assertIn("Cuando se realice una conducta prevista como delito", result["content"][0]["text"])
+
     def test_tools_call_marks_error_when_wrapper_returns_error(self) -> None:
         with patch.object(
             mcp_server,
@@ -185,7 +200,17 @@ class McpServerTests(unittest.TestCase):
             )
         self.assertEqual(result["strategyUsed"], "articulo")
         self.assertEqual(result["resolvedNumeroArticulo"], 5)
-        self.assertIn("Ley Federal del Trabajo", result["resolvedNombreLey"])
+        self.assertEqual(result["resolvedNombreLey"], "ley federal del trabajo")
+
+    def test_consulta_juridica_completa_infers_article_metadata_with_accents(self) -> None:
+        fake_result = {"selectedLaw": {"nombre": "Código Penal para el Estado Libre y Soberano de Oaxaca"}}
+        with patch.object(mcp_server, "obtener_articulo_por_ley_y_numero", return_value=fake_result) as mocked:
+            result = mcp_server.consulta_juridica_completa(
+                consulta="dame el primer párrafo del artículo 8 del código penal de oaxaca"
+            )
+        self.assertEqual(result["strategyUsed"], "articulo")
+        self.assertEqual(result["resolvedNumeroArticulo"], 8)
+        self.assertEqual(mocked.call_args.kwargs["nombreLey"], "codigo penal de oaxaca")
 
     def test_consulta_juridica_completa_routes_to_precedente(self) -> None:
         fake_result = {"count": 2, "items": [{"registroDigital": 1}, {"registroDigital": 2}]}
