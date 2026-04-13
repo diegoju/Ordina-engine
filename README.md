@@ -4,79 +4,99 @@
   <img src="assets/ordina-logo.png" alt="Ordina logo" width="260" />
 </p>
 
-Ordina-engine es una API para consultar informacion juridica publica mexicana desde un solo punto.
+<p align="center">
+  Consulta leyes, artículos, jurisprudencia y precedentes desde una sola capa.
+</p>
 
-Esta pensada para dos tipos de uso:
+Ordina-engine es una API y capa de consulta para información jurídica pública mexicana.
 
-- personas tecnicas que quieren integrar fuentes juridicas en aplicaciones, asistentes o scripts;
-- personas del ambito legal que necesitan entender con claridad que puede consultar el sistema y como se usa.
+Está pensada para una idea simple: que encontrar leyes, artículos, jurisprudencia y precedentes sea más fácil de consultar, integrar y reutilizar.
 
-Ordina-engine unifica principalmente:
+Unifica principalmente:
 
-- catalogo de leyes y ordenamientos;
-- jurisprudencia del Semanario Judicial de la Federacion (SJF);
-- articulos legales consultados mediante Jurislex;
-- precedentes y ejecutorias del buscador juridico de la SCJN.
+- catálogo de leyes y ordenamientos;
+- jurisprudencia del Semanario Judicial de la Federación (SJF);
+- artículos legales consultados mediante Jurislex;
+- precedentes y ejecutorias del buscador jurídico de la SCJN.
 
-## Aviso importante
+## Para qué sirve
 
-Ordina-engine y el chat oficial de Ordina son proyectos independientes y no oficiales.
+Ordina sirve para:
 
-Ordina-engine funciona como una capa tecnica para facilitar la consulta de informacion juridica publica disponible en sitios institucionales. El chat oficial usa esta API como interfaz de consulta, pero ninguno de los dos sustituye, modifica ni altera las fuentes oficiales.
+- ubicar rápidamente una ley y sus identificadores de consulta;
+- obtener artículos legales con un flujo más claro;
+- buscar jurisprudencia del SJF y luego traer su detalle;
+- consultar precedentes y ejecutorias de la SCJN desde una interfaz más uniforme;
+- alimentar chats, GPTs, MCPs, scripts o aplicaciones jurídicas.
 
-Este proyecto:
+## Qué resuelve
 
-- no esta afiliado, patrocinado ni autorizado por ninguna institucion publica;
-- no busca replicar ni reemplazar servicios oficiales;
-- no elude mecanismos de seguridad ni autenticacion;
-- solo consume informacion publicamente accesible.
+Las fuentes jurídicas públicas existen, pero suelen tener uno o varios de estos problemas:
 
-Toda verificacion juridica debe realizarse directamente en los portales institucionales correspondientes. Las personas usuarias son responsables del uso e interpretacion de la informacion consultada mediante este proyecto.
+- interfaces cambiantes;
+- respuestas poco uniformes;
+- flujos distintos entre cada fuente;
+- mayor dificultad para integrarlas en asistentes, buscadores o automatizaciones.
 
-## Uso rapido
+Ordina-engine funciona como una capa más uniforme para consultar esas fuentes sin tener que aprender un flujo distinto para cada una.
 
-Si solo quieres probarlo:
+No intenta sustituir las fuentes oficiales. Intenta hacerlas más fáciles de consultar y conectar.
+
+## Pruébalo rápido
+
+Si quieres probarlo hoy mismo:
 
 - Chat listo para usar: [Ordina Chat](https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina)
 - Base URL de la API: `https://ordina-engine.vercel.app`
+- Contrato principal: `openapi-ordina-hub.yaml`
 
-## Que problema resuelve
+Ordina puede usarse de tres formas:
 
-Las fuentes juridicas publicas existen, pero normalmente presentan una o varias de estas dificultades:
+1. como chat o GPT especializado;
+2. como API HTTP;
+3. como servidor MCP para Claude Desktop, Cursor, IDEs o agentes.
 
-- interfaces que cambian con el tiempo;
-- respuestas inconsistentes o poco amigables para integracion;
-- flujos tecnicos distintos entre cada fuente;
-- mayor complejidad para construir asistentes, buscadores o automatizaciones.
+Qué obtienes con eso:
 
-Ordina-engine ofrece una capa mas uniforme para consultar esas fuentes con un contrato mas estable.
+- una entrada más simple para consultar fuentes jurídicas públicas;
+- un flujo más claro para leyes, artículos y jurisprudencia;
+- una base reutilizable para asistentes, integraciones y automatizaciones.
 
-## Flujo basico de uso
+Si vienes del mundo legal, lo más simple es empezar por el chat.
 
-La mayoria de consultas siguen este orden:
+Si vienes del mundo técnico, empieza por `/ley`, `openapi-ordina-hub.yaml` o `mcp_server.py`.
 
-1. Buscar una ley para obtener `idLegislacion` y `categoria`.
-2. Si hace falta, buscar jurisprudencia por termino.
-3. Consultar articulos usando los identificadores obtenidos.
-4. Si se requiere texto completo, pedir el detalle del articulo o de la jurisprudencia.
+## Flujo básico
 
-### Sobre `idLegislacion` y `categoria`
+La mayoría de consultas siguen este orden:
 
-- `idLegislacion` identifica la ley especifica.
-- `categoria` define la ruta de consulta en Jurislex.
-- Para evitar errores, primero consulta `/ley` y luego usa esos valores en `/jurislex/articulos/*`.
-- Si el articulo tiene formato especial, por ejemplo `167-B`, conviene buscar primero por el numero base, por ejemplo `167`, y luego elegir el resultado correcto.
+1. buscar una ley para obtener `idLegislacion` y `categoria`;
+2. buscar artículos con esos identificadores;
+3. pedir detalle si hace falta texto completo;
+4. para jurisprudencia, buscar primero y luego consultar detalle por `ius`.
+
+Ejemplos típicos:
+
+- “dame el artículo 123 constitucional”;
+- “busca jurisprudencia sobre amparo indirecto”;
+- “encuentra el Código Penal de Oaxaca”;
+- “localiza precedentes sobre libertad de expresión”.
+
+Notas útiles:
+
+- `idLegislacion` identifica la ley específica;
+- `categoria` define la ruta de consulta en Jurislex;
+- para evitar errores, primero consulta `/ley` y después usa esos valores en `/jurislex/articulos/*`;
+- si el artículo tiene formato especial, por ejemplo `167-B`, conviene buscar primero por el número base.
 
 ## Endpoints principales
 
-### Estado del servicio
+### Salud del servicio
 
 - `GET /health`
 - `GET /health/deep`
 
-`/health` devuelve el estado basico del servicio.
-
-Ejemplo de respuesta:
+Ejemplo:
 
 ```json
 {
@@ -85,11 +105,11 @@ Ejemplo de respuesta:
 }
 ```
 
-`/health/deep` revisa dependencias clave como catalogo local, SJF y Jurislex, y devuelve `ok` o `degraded`.
+### Catálogo de leyes
 
-### Catalogo de leyes
+Sirve para localizar una ley y obtener los identificadores que luego se usan en Jurislex.
 
-Permite localizar una ley y obtener los identificadores que despues se usan en Jurislex.
+Este suele ser el primer endpoint que debes usar.
 
 - `GET /ley?id=<int>`
 - `GET /ley?categoria=<int>`
@@ -99,21 +119,21 @@ Ejemplo:
 
 ```bash
 curl --get "https://ordina-engine.vercel.app/ley" \
-  --data-urlencode "nombre=constitucion"
+  --data-urlencode "nombre=constitución"
 ```
 
 ### Jurisprudencia del SJF
 
-Busqueda:
+Búsqueda:
 
-- `GET /jurisprudencia/buscar?q=<termino>&page=0&size=10`
+- `GET /jurisprudencia/buscar?q=<término>&page=0&size=10`
 - `POST /jurisprudencia/buscar`
 
 Detalle:
 
-- `GET /jurisprudencia/detalle?ius=<numero>`
+- `GET /jurisprudencia/detalle?ius=<número>`
 
-El detalle tambien soporta `debug=true` para revisar intentos y URLs cuando el upstream del SJF responde de forma inconsistente.
+El detalle también soporta `debug=true` para revisar intentos y URLs cuando el upstream del SJF responde de forma inconsistente.
 
 Ejemplo:
 
@@ -124,9 +144,15 @@ curl --get "https://ordina-engine.vercel.app/jurisprudencia/buscar" \
   --data-urlencode "size=3"
 ```
 
-### Articulos legales en Jurislex
+### Artículos legales en Jurislex
 
-Busqueda:
+Para artículos, normalmente el flujo correcto es:
+
+1. resolver la ley con `/ley`;
+2. buscar coincidencias con `/jurislex/articulos/buscar`;
+3. pedir detalle con `/jurislex/articulos/detalle`.
+
+Búsqueda:
 
 - `GET /jurislex/articulos/buscar`
 - `POST /jurislex/articulos/buscar`
@@ -150,12 +176,8 @@ curl --get "https://ordina-engine.vercel.app/jurislex/articulos/buscar" \
 
 ### Precedentes y ejecutorias de la SCJN
 
-Busqueda:
-
 - `GET /precedentes/buscar`
 - `POST /precedentes/buscar`
-
-La respuesta resumida evita el bloque pesado de embeddings y devuelve un formato mas facil de consumir.
 
 Ejemplo:
 
@@ -167,348 +189,48 @@ curl --get "https://ordina-engine.vercel.app/precedentes/buscar" \
   --data-urlencode "size=3"
 ```
 
-## Esquemas OpenAPI incluidos
+## OpenAPI
 
-Usa el archivo que mejor se ajuste a tu integracion:
+El repositorio incluye varios contratos OpenAPI:
 
-- `openapi-ordina-hub.yaml`: contrato principal con la API completa;
-- `openapi-sjf.yaml`: solo jurisprudencia y precedentes;
-- `openapi-jurislex.yaml`: leyes, decretos y articulos;
-- `openapi-legislaciones.yaml`: solo catalogo de leyes.
+- `openapi-ordina-hub.yaml`: API completa recomendada;
+- `openapi-sjf.yaml`: jurisprudencia y precedentes;
+- `openapi-jurislex.yaml`: leyes, decretos y artículos;
+- `openapi-legislaciones.yaml`: sólo catálogo de leyes.
 
-## Crear tu propio GPT o agente
+Si quieres crear tu propio GPT o agente con Actions:
 
-### Opcion rapida
+1. elige el archivo OpenAPI;
+2. pégalo en tu integración;
+3. verifica la base URL `https://ordina-engine.vercel.app`;
+4. prueba al menos `GET /health` y `GET /ley?nombre=constitución`.
 
-Usa el GPT existente:
+## Instrucciones para chats
 
-[Ordina Chat](https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina)
-
-### Opcion personalizada con Actions
-
-1. Elige un archivo OpenAPI.
-2. Ve a Actions en tu GPT.
-3. Pega el YAML.
-4. Verifica la base URL: `https://ordina-engine.vercel.app`
-5. Prueba al menos:
-   - `GET /health`
-   - `GET /ley?nombre=constitucion`
-
-## Instrucciones del chat
-
-Para obtener mejores resultados, usa las instrucciones base incluidas en este repositorio.
-
-1. Abre `Ordina-instrucciones-minimas.md`.
-2. Copia su contenido completo.
-3. Pegalo en la seccion `Instructions` o `System Instructions` de tu chat o GPT personalizado.
+Para obtener mejores resultados, usa las instrucciones base incluidas en `Ordina-instrucciones-minimas.md`.
 
 Estas instrucciones ayudan a:
 
 - seguir el flujo correcto entre endpoints;
-- resolver primero la ley y despues los articulos;
+- resolver primero la ley y después los artículos;
 - buscar y explicar jurisprudencia con menos errores;
-- mantener respuestas juridicas claras y sin inventar informacion.
+- mantener respuestas jurídicas claras y sin inventar información.
 
 ## Variables opcionales
 
-Solo son necesarias si alguna fuente bloquea solicitudes:
+Sólo son necesarias si alguna fuente bloquea solicitudes:
 
 - `SJF_COOKIE`
 - `JURISLEX_COOKIE`
 - `BJ_SCJN_COOKIE`
 
-## Servidor MCP
+## MCP
 
-Ordina-engine tambien puede usarse como servidor MCP por `stdio` para clientes compatibles, por ejemplo Claude Desktop, Cursor, IDEs o agentes.
+Ordina-engine también puede usarse como servidor MCP por `stdio` para clientes compatibles.
 
-### Ejecutar localmente
+Esto te permite usar Ordina como backend jurídico para Claude Desktop u otros clientes MCP sin tener que reimplementar los flujos de leyes, artículos o jurisprudencia.
 
-En todos los sistemas el MCP actual corre por `stdio`. Eso significa que tu cliente inicia `mcp_server.py` como proceso local y se comunica por entrada y salida estandar.
-
-### macOS
-
-```bash
-cd /ruta/a/tu/repo
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python mcp_server.py
-```
-
-Ejemplo para Claude Desktop en macOS:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine": {
-      "command": "/ruta/a/tu/repo/.venv/bin/python",
-      "args": ["/ruta/a/tu/repo/mcp_server.py"]
-    }
-  }
-}
-```
-
-### Linux
-
-```bash
-cd /ruta/a/tu/repo
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python mcp_server.py
-```
-
-Ejemplo para Claude Desktop en Linux:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine": {
-      "command": "/ruta/a/tu/repo/.venv/bin/python",
-      "args": ["/ruta/a/tu/repo/mcp_server.py"]
-    }
-  }
-}
-```
-
-### Windows
-
-En Windows conviene usar rutas absolutas y el `python.exe` del `venv`.
-
-```powershell
-cd C:\ruta\a\tu\repo
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python mcp_server.py
-```
-
-Ejemplo para Claude Desktop en Windows:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine": {
-      "command": "C:\\ruta\\a\\tu\\repo\\.venv\\Scripts\\python.exe",
-      "args": ["C:\\ruta\\a\\tu\\repo\\mcp_server.py"]
-    }
-  }
-}
-```
-
-Notas practicas para cualquier sistema:
-
-- usa rutas absolutas en `command` y `args`;
-- prueba primero que `mcp_server.py` arranque manualmente;
-- si necesitas cookies opcionales, defínelas en el entorno donde corre el proceso;
-- para clientes GUI, suele ser mas estable usar el `python` del `venv` que depender del PATH del sistema.
-
-### Despliegue personal en servidor Linux
-
-Mientras el MCP siga corriendo por `stdio`, la forma mas simple de usarlo desde otra maquina es instalarlo en tu servidor y hacer que Claude lo arranque por `ssh` bajo demanda. No hace falta exponer puertos HTTP ni dejar un servicio MCP publico todavia.
-
-Ejemplo en Arch Linux:
-
-```bash
-sudo pacman -Syu --noconfirm git python python-pip
-git clone https://github.com/<tu-usuario>/<tu-repo>.git /opt/ordina-engine
-cd /opt/ordina-engine/repo
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m py_compile mcp_server.py api.py
-python -m unittest test_mcp_server.py
-```
-
-Si vas a usar cookies opcionales para SJF, Jurislex o SCJN, exportalas en el entorno del usuario remoto que ejecutara `python`.
-
-### Usar Claude Desktop contra un servidor remoto por SSH
-
-Este flujo sigue siendo MCP por `stdio`, pero el proceso corre en tu servidor remoto en vez de tu laptop. Claude Desktop abre `ssh`, inicia `mcp_server.py` y habla con el proceso a traves del canal estandar.
-
-Pasos recomendados:
-
-1. Configura acceso por llave SSH sin password entre tu maquina local y el servidor.
-2. Verifica manualmente que este comando funcione desde tu maquina local.
-3. Usa la misma ruta absoluta en la configuracion de Claude Desktop.
-
-Prueba manual:
-
-```bash
-ssh usuario@tu-servidor '/opt/ordina-engine/repo/.venv/bin/python /opt/ordina-engine/repo/mcp_server.py'
-```
-
-Ejemplo para Claude Desktop usando SSH:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine": {
-      "command": "ssh",
-      "args": [
-        "usuario@tu-servidor",
-        "/opt/ordina-engine/repo/.venv/bin/python /opt/ordina-engine/repo/mcp_server.py"
-      ]
-    }
-  }
-}
-```
-
-Notas practicas:
-
-- usa rutas absolutas en el servidor remoto;
-- normalmente conviene usar el `python` del `venv` en vez del sistema;
-- si `ssh` pide password o confirmacion de host, resuelvelo antes fuera de Claude;
-- este esquema es suficiente para uso personal o adopcion temprana.
-
-### MCP remoto por HTTP
-
-Si quieres una URL para usar el conector remoto de Claude, el repositorio incluye `mcp_http_server.py`, que expone un endpoint MCP por Streamable HTTP en `/mcp`.
-
-Arranque local rapido:
-
-```bash
-uvicorn mcp_http_server:app --host 127.0.0.1 --port 8000
-```
-
-Endpoint MCP remoto:
-
-```text
-http://127.0.0.1:8000/mcp
-```
-
-Notas del servidor HTTP:
-
-- `POST /mcp` procesa mensajes JSON-RPC MCP y devuelve `application/json`;
-- `GET /mcp` responde `405` porque esta version minima no abre stream SSE separado;
-- `DELETE /mcp` cierra una sesion MCP activa;
-- en `initialize`, el servidor devuelve `Mcp-Session-Id` y espera ese header en llamadas posteriores;
-- si defines `MCP_ALLOWED_ORIGINS`, solo aceptara esos `Origin` separados por comas.
-
-### Despliegue remoto en Arch Linux con Caddy
-
-Ejemplo de arranque del servidor HTTP en tu VPS o servidor personal:
-
-```bash
-cd /home/mou/Ordina-engine
-./.venv/bin/pip install -r requirements.txt
-./.venv/bin/uvicorn mcp_http_server:app --host 127.0.0.1 --port 8000
-```
-
-Si quieres dejarlo como servicio, puedes crear un `systemd` unit sencillo:
-
-```ini
-[Unit]
-Description=Ordina MCP HTTP
-After=network.target
-
-[Service]
-User=mou
-WorkingDirectory=/home/mou/Ordina-engine
-Environment=MCP_ALLOWED_ORIGINS=https://claude.ai,https://claude.ai/settings/connectors
-ExecStart=/home/mou/Ordina-engine/.venv/bin/uvicorn mcp_http_server:app --host 127.0.0.1 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Con Caddy al frente:
-
-```caddy
-mcp.tu-dominio.com {
-    reverse_proxy 127.0.0.1:8000
-}
-```
-
-La URL final para Claude quedaria asi:
-
-```text
-https://mcp.tu-dominio.com/mcp
-```
-
-### Configuracion remota para Claude
-
-Si ya tienes la URL HTTPS publicada, puedes agregar el conector remoto de Claude usando:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine-remote": {
-      "type": "http",
-      "url": "https://mcp.tu-dominio.com/mcp"
-    }
-  }
-}
-```
-
-### Que expone el MCP
-
-El servidor MCP tiene tres capas.
-
-Herramientas base para reflejar la API:
-
-- `health`
-- `healthDeep`
-- `buscarLey`
-- `buscarJurisprudencia`
-- `buscarJurisprudenciaAvanzada`
-- `obtenerDetalleJurisprudencia`
-- `buscarPrecedentes`
-- `buscarPrecedentesAvanzado`
-- `buscarDecretosJurislex`
-- `buscarArticulosJurislex`
-- `buscarArticulosJurislexAvanzado`
-- `obtenerDetalleArticuloJurislex`
-
-Herramientas compuestas para flujos mas utiles en asistentes:
-
-- `resolverLeyPorNombre`
-- `buscarYDetallarJurisprudencia`
-- `buscarArticuloPorLeyYNumero`
-- `obtenerArticuloPorLeyYNumero`
-- `consultaJuridicaCompleta`
-
-Recursos y prompts MCP para guiar a clientes compatibles:
-
-- resources: `ordina://readme`, `ordina://instrucciones-minimas`, `ordina://openapi/hub`, `ordina://catalogo/preview`
-- prompts: `consulta-juridica-segura`, `buscar-articulo`, `buscar-jurisprudencia`
-
-### Tools compuestas mas importantes
-
-`obtenerArticuloPorLeyYNumero` resuelve la ley por nombre, localiza el articulo exacto y devuelve tambien el detalle completo.
-
-`consultaJuridicaCompleta` intenta decidir si la consulta debe resolverse como ley, articulo, jurisprudencia o precedente. Ademas:
-
-- intenta inferir `numeroArticulo` desde texto libre;
-- intenta detectar una pista de `nombreLey` dentro de la consulta;
-- devuelve `summary`, `confidence` y `reasons` para explicar la estrategia elegida.
-
-### Resources MCP disponibles
-
-- `ordina://readme`
-- `ordina://instrucciones-minimas`
-- `ordina://openapi/hub`
-- `ordina://catalogo/preview`
-
-### Prompts MCP disponibles
-
-- `consulta-juridica-segura`
-- `buscar-articulo`
-- `buscar-jurisprudencia`
-
-### Configuracion de ejemplo
-
-Configuracion minima:
-
-```json
-{
-  "command": "python3",
-  "args": ["/ruta/a/tu/repo/mcp_server.py"]
-}
-```
-
-Ejemplo para Claude Desktop:
+Configuración mínima:
 
 ```json
 {
@@ -521,47 +243,33 @@ Ejemplo para Claude Desktop:
 }
 ```
 
-Ejemplo para Cursor:
-
-```json
-{
-  "mcpServers": {
-    "ordina-engine": {
-      "command": "python3",
-      "args": ["/ruta/a/tu/repo/mcp_server.py"]
-    }
-  }
-}
-```
-
-### Verificacion del MCP
+Ejemplo de instalación local:
 
 ```bash
-python -m py_compile mcp_server.py api.py
-python -m unittest test_mcp_server.py
+cd /ruta/a/tu/repo
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python mcp_server.py
 ```
 
-La suite MCP cubre:
+El MCP expone:
 
-- dispatcher puro;
-- errores y edge cases con mocks;
-- integracion real por `stdio` contra `mcp_server.py`.
+- herramientas base como `buscarLey`, `buscarJurisprudencia`, `buscarArticulosJurislex` y `obtenerDetalleArticuloJurislex`;
+- herramientas compuestas como `resolverLeyPorNombre`, `buscarArticuloPorLeyYNumero`, `obtenerArticuloPorLeyYNumero` y `consultaJuridicaCompleta`;
+- recursos y prompts para guiar a clientes compatibles.
 
-### Cliente de ejemplo
+Si necesitas despliegue remoto por SSH o HTTP, revisa `mcp_server.py` y `mcp_http_server.py` como referencia de implementación.
 
-`mcp_client_example.py` muestra un cliente minimo que:
+## Aviso importante
 
-- inicia el servidor MCP como subprocess;
-- ejecuta `initialize`;
-- llama la tool `consultaJuridicaCompleta`;
-- imprime la respuesta JSON-RPC completa.
+Ordina-engine y el chat oficial de Ordina son proyectos independientes y no oficiales.
 
-Ejecutalo asi:
+Este proyecto:
 
-```bash
-python mcp_client_example.py
-```
+- no está afiliado, patrocinado ni autorizado por ninguna institución pública;
+- no busca replicar ni reemplazar servicios oficiales;
+- no elude mecanismos de seguridad ni autenticación;
+- sólo consume información públicamente accesible.
 
-## Verificacion automatica
-
-El repositorio incluye un workflow de GitHub Actions en `.github/workflows/smoke-tests.yml` que ejecuta `smoke_test.py` en cada push a `main`.
+Toda verificación jurídica debe realizarse directamente en los portales institucionales correspondientes. Las personas usuarias son responsables del uso e interpretación de la información consultada mediante este proyecto.
