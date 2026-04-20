@@ -4,16 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ordina</title>
-  <meta name="description" content="Asistente de investigación jurídica basado en IA para consulta de legislación, jurisprudencia y precedentes mexicanos." />
+  <meta name="description" content="Ordina extrae citas de artículos, leyes y jurisprudencia mexicana desde texto o archivos de texto." />
   <style>
     :root {
       --bg: #0b1020;
       --panel: rgba(255, 255, 255, 0.06);
+      --panel-strong: rgba(255, 255, 255, 0.09);
       --panel-border: rgba(255, 255, 255, 0.12);
       --text: #f3f4f6;
       --muted: #b8c0d4;
       --accent: #8b5cf6;
       --accent-2: #f59e0b;
+      --danger: #fb7185;
       --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
       --radius: 24px;
     }
@@ -33,14 +35,13 @@
     }
 
     body {
-      display: grid;
-      place-items: center;
-      padding: 32px 20px;
+      padding: 32px 20px 48px;
     }
 
     .wrap {
       width: 100%;
-      max-width: 960px;
+      max-width: 1120px;
+      margin: 0 auto;
     }
 
     .card {
@@ -56,8 +57,7 @@
     .hero {
       display: grid;
       grid-template-columns: 1.1fr 0.9fr;
-      gap: 0;
-      min-height: 560px;
+      min-height: 520px;
     }
 
     .left {
@@ -122,12 +122,13 @@
       padding: 14px 20px;
       border-radius: 14px;
       font-weight: 600;
+      cursor: pointer;
       transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+      color: var(--text);
+      font-size: 15px;
     }
 
-    .btn:hover {
-      transform: translateY(-1px);
-    }
+    .btn:hover { transform: translateY(-1px); }
 
     .btn-primary {
       color: white;
@@ -136,12 +137,12 @@
     }
 
     .btn-secondary {
-      color: var(--text);
       background: rgba(255,255,255,0.06);
       border: 1px solid rgba(255,255,255,0.10);
     }
 
-    .meta {
+    .meta,
+    .stats {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
@@ -149,7 +150,8 @@
       font-size: 14px;
     }
 
-    .meta span {
+    .meta span,
+    .stats span {
       padding: 10px 12px;
       border-radius: 12px;
       background: rgba(255,255,255,0.04);
@@ -168,19 +170,17 @@
     }
 
     .orb {
-      width: min(320px, 70vw);
+      width: min(340px, 72vw);
       aspect-ratio: 1;
       border-radius: 28px;
-      background:
-        linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03));
+      background: linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03));
       border: 1px solid rgba(255,255,255,0.12);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.08),
-        0 30px 70px rgba(0,0,0,0.35);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 30px 70px rgba(0,0,0,0.35);
       display: grid;
       place-items: center;
       position: relative;
       overflow: hidden;
+      padding: 28px;
     }
 
     .orb::before,
@@ -225,6 +225,210 @@
       color: transparent;
     }
 
+    .orb-copy {
+      position: relative;
+      z-index: 1;
+      margin-top: 18px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+      font-size: 14px;
+      max-width: 280px;
+    }
+
+    .workspace {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 28px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+
+    .panel p,
+    .hint,
+    .empty {
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .uploader {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 16px;
+      border: 1px dashed rgba(255,255,255,0.18);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .file-name {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    textarea,
+    input,
+    select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      background: rgba(6, 10, 24, 0.76);
+      color: var(--text);
+      padding: 18px;
+      font: inherit;
+      line-height: 1.6;
+    }
+
+    textarea {
+      min-height: 320px;
+      resize: vertical;
+    }
+
+    select {
+      appearance: none;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    textarea:focus,
+    input:focus {
+      outline: 2px solid rgba(139, 92, 246, 0.55);
+      outline-offset: 2px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hint {
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .summary-card {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .summary-card strong {
+      display: block;
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .results {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .results.tight {
+      margin-top: 0;
+    }
+
+    .result {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .result-head {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+    }
+
+    .pill.accent {
+      color: white;
+      background: rgba(139, 92, 246, 0.18);
+      border-color: rgba(139, 92, 246, 0.35);
+    }
+
+    .pill.warn {
+      color: white;
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.30);
+    }
+
+    .source {
+      margin: 0 0 10px;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .detail {
+      margin: 4px 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .status,
+    .error {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    .status {
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .error {
+      color: white;
+      background: rgba(251, 113, 133, 0.14);
+      border: 1px solid rgba(251, 113, 133, 0.28);
+    }
+
     footer {
       text-align: center;
       color: var(--muted);
@@ -233,8 +437,9 @@
       opacity: 0.9;
     }
 
-    @media (max-width: 860px) {
-      .hero {
+    @media (max-width: 920px) {
+      .hero,
+      .workspace {
         grid-template-columns: 1fr;
       }
 
@@ -244,16 +449,28 @@
         min-height: 260px;
       }
 
-      .left {
-        padding: 38px 26px;
+      .left,
+      .panel {
+        padding: 32px 24px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
       }
 
-      .right {
-        padding: 26px;
+      .field-grid {
+        grid-template-columns: 1fr;
       }
 
-      .subtitle {
-        font-size: 16px;
+      .btn,
+      .toolbar {
+        width: 100%;
+      }
+
+      .toolbar .btn {
+        flex: 1 1 auto;
       }
     }
   </style>
@@ -264,43 +481,425 @@
       <div class="left">
         <div class="badge">
           <span class="dot"></span>
-          Investigación jurídica + IA
+          Ordina-engine + extracción determinista
         </div>
 
         <h1>Ordina</h1>
 
         <p class="subtitle">
-          Asistente de investigación jurídica basado en IA para consultar legislación y
-          jurisprudencia a partir de fuentes jurídicas.
+          Sube un archivo de texto o pega tu escrito para detectar citas de artículos,
+          leyes, jurisprudencia, tesis y registros digitales sin depender de GenAI.
         </p>
 
         <div class="actions">
-          <a class="btn btn-primary" href="https://chatgpt.com/g/g-67391c46cf708191929fd5baa1cbc010-ordina">
-            Abrir Ordina
-          </a>
-
-          <a class="btn btn-secondary" href="https://github.com/diegoju/Ordina-engine">
-            Ver repositorio
-          </a>
+          <a class="btn btn-primary" href="#extractor">Probar extractor</a>
+          <a class="btn btn-secondary" href="https://github.com/diegoju/Ordina-engine">Ver repositorio</a>
         </div>
 
         <div class="meta">
-          <span>GPT personalizado</span>
-          <span>Fuentes jurídicas mexicanas</span>
           <span>Ordina-engine API</span>
+          <span>Flujo para leyes y jurisprudencia</span>
+          <span>MVP para citas jurídicas</span>
         </div>
       </div>
 
       <div class="right">
         <div class="orb">
-          <div class="logo"><span class="o">O</span>rdina</div>
+          <div>
+            <div class="logo"><span class="o">O</span>rdina</div>
+            <p class="orb-copy">
+              Detecta referencias jurídicas y conviértelas en estructura utilizable para consulta posterior.
+            </p>
+          </div>
         </div>
       </div>
+    </section>
+
+    <section id="extractor" class="workspace">
+      <section class="card panel">
+        <h2>Extractor de citas</h2>
+        <p>
+          El frontend lee el archivo en tu navegador y envía el texto a Ordina para extraer citas.
+          Este MVP soporta archivos de texto como <code>.txt</code>, <code>.md</code>, <code>.html</code> y <code>.json</code>.
+        </p>
+
+        <div class="controls">
+          <div class="uploader">
+            <label class="btn btn-secondary" for="fileInput">Subir archivo</label>
+            <input id="fileInput" type="file" accept=".txt,.md,.html,.htm,.json,.csv" hidden />
+            <span id="fileName" class="file-name">Sin archivo cargado</span>
+          </div>
+
+          <textarea id="inputText" placeholder="Pega aquí un escrito, demanda, concepto de violación o cualquier texto jurídico para que Ordina detecte las citas."></textarea>
+
+          <div class="toolbar">
+            <button id="analyzeBtn" class="btn btn-primary" type="button">Extraer citas</button>
+            <button id="clearBtn" class="btn btn-secondary" type="button">Limpiar</button>
+          </div>
+
+          <p class="hint">
+            Ejemplo: <code>artículo 14 de la Ley de Amparo</code>, <code>artículo 16 constitucional</code> o <code>registro digital 2023456</code>.
+          </p>
+        </div>
+
+        <div id="status" class="status" hidden></div>
+        <div id="error" class="error" hidden></div>
+      </section>
+
+      <aside class="card panel">
+        <h2>Resultados</h2>
+        <p>Ordina devuelve la cita detectada, su tipo y, cuando puede, la ley resuelta dentro del catálogo.</p>
+
+        <div id="summary" class="summary-grid" hidden></div>
+        <div id="results" class="results"></div>
+        <p id="empty" class="empty">Todavía no hay resultados. Carga texto y ejecuta la extracción.</p>
+      </aside>
+    </section>
+
+    <section class="workspace">
+      <section class="card panel">
+        <h2>Buscador unificado de normas</h2>
+        <p>
+          Consulta normas unificando catálogo Jurislex y el índice de legislación SIL.
+          Los filtros como <code>LEY</code>, <code>FEDERAL</code> o <code>CAMPECHE</code> se aplican sobre SIL.
+        </p>
+
+        <div class="controls">
+          <input id="legQuery" type="text" placeholder="Ejemplo: Electoral" value="Electoral" />
+
+          <div class="field-grid">
+            <select id="legCategoria">
+              <option value="LEY" selected>LEY</option>
+              <option value="CONSTITUCION">CONSTITUCION</option>
+              <option value="CODIGO">CODIGO</option>
+              <option value="REGLAMENTO">REGLAMENTO</option>
+              <option value="">Sin filtro</option>
+            </select>
+
+            <select id="legAmbito">
+              <option value="FEDERAL" selected>FEDERAL</option>
+              <option value="ESTATAL">ESTATAL</option>
+              <option value="MUNICIPAL">MUNICIPAL</option>
+              <option value="">Sin filtro</option>
+            </select>
+
+            <input id="legMateria" type="text" placeholder="Materia opcional" />
+            <input id="legEstado" type="text" placeholder="Estado opcional, ej. CAMPECHE" />
+            <input id="legVigencia" type="text" placeholder="Vigencia opcional" />
+          </div>
+
+          <div class="toolbar">
+            <button id="legSearchBtn" class="btn btn-primary" type="button">Buscar legislación</button>
+            <button id="legClearBtn" class="btn btn-secondary" type="button">Limpiar filtros</button>
+          </div>
+        </div>
+
+        <div id="legStatus" class="status" hidden></div>
+        <div id="legError" class="error" hidden></div>
+      </section>
+
+      <aside class="card panel">
+        <h2>Resultados unificados</h2>
+        <p>Ordina indica si conviene seguir por Jurislex, por SIL o si la norma aparece en ambas fuentes.</p>
+
+        <div id="legSummary" class="summary-grid" hidden></div>
+        <div id="legResults" class="results tight"></div>
+        <p id="legEmpty" class="empty">Todavía no hay resultados de legislación.</p>
+      </aside>
     </section>
 
     <footer>
       Proyecto personal de tecnología aplicada al derecho.
     </footer>
   </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const fileName = document.getElementById("fileName");
+    const inputText = document.getElementById("inputText");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusBox = document.getElementById("status");
+    const errorBox = document.getElementById("error");
+    const summary = document.getElementById("summary");
+    const results = document.getElementById("results");
+    const empty = document.getElementById("empty");
+    const legQuery = document.getElementById("legQuery");
+    const legCategoria = document.getElementById("legCategoria");
+    const legAmbito = document.getElementById("legAmbito");
+    const legMateria = document.getElementById("legMateria");
+    const legEstado = document.getElementById("legEstado");
+    const legVigencia = document.getElementById("legVigencia");
+    const legSearchBtn = document.getElementById("legSearchBtn");
+    const legClearBtn = document.getElementById("legClearBtn");
+    const legStatus = document.getElementById("legStatus");
+    const legError = document.getElementById("legError");
+    const legSummary = document.getElementById("legSummary");
+    const legResults = document.getElementById("legResults");
+    const legEmpty = document.getElementById("legEmpty");
+
+    let currentSource = "texto";
+
+    function setStatus(message) {
+      statusBox.hidden = !message;
+      statusBox.textContent = message || "";
+    }
+
+    function setError(message) {
+      errorBox.hidden = !message;
+      errorBox.textContent = message || "";
+    }
+
+    function setLegStatus(message) {
+      legStatus.hidden = !message;
+      legStatus.textContent = message || "";
+    }
+
+    function setLegError(message) {
+      legError.hidden = !message;
+      legError.textContent = message || "";
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function renderSummary(data) {
+      const cards = [
+        ["Citas", data.totalCitas || 0],
+        ["Artículos", data.articulos || 0],
+        ["Jurisprudencias", data.jurisprudencias || 0],
+        ["Tesis", data.tesis || 0],
+      ];
+
+      summary.innerHTML = cards.map(([label, value]) => `
+        <div class="summary-card">
+          <strong>${value}</strong>
+          <span>${label}</span>
+        </div>
+      `).join("");
+      summary.hidden = false;
+    }
+
+    function renderResults(items) {
+      if (!items.length) {
+        results.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+
+      empty.hidden = true;
+      results.innerHTML = items.map((item) => {
+        const tipo = escapeHtml(item.tipo || "cita");
+        const subtipo = item.subtipo ? `<span class="pill">${escapeHtml(item.subtipo)}</span>` : "";
+        const estado = item.resuelta ? '<span class="pill accent">resuelta</span>' : '<span class="pill warn">parcial</span>';
+        const detalles = [];
+
+        if (Array.isArray(item.articulos) && item.articulos.length) {
+          detalles.push(`<p class="detail"><strong>Artículos:</strong> ${escapeHtml(item.articulos.join(", "))}</p>`);
+        }
+        if (item.ley) {
+          detalles.push(`<p class="detail"><strong>Ley:</strong> ${escapeHtml(item.ley)}</p>`);
+        }
+        if (item.registroDigital) {
+          detalles.push(`<p class="detail"><strong>Registro digital:</strong> ${escapeHtml(item.registroDigital)}</p>`);
+        }
+        if (item.clave) {
+          detalles.push(`<p class="detail"><strong>Clave:</strong> ${escapeHtml(item.clave)}</p>`);
+        }
+        if (item.idLegislacion) {
+          detalles.push(`<p class="detail"><strong>idLegislacion:</strong> ${escapeHtml(item.idLegislacion)}</p>`);
+        }
+        if (item.categoria) {
+          detalles.push(`<p class="detail"><strong>categoria:</strong> ${escapeHtml(item.categoria)}</p>`);
+        }
+
+        return `
+          <article class="result">
+            <div class="result-head">
+              <span class="pill accent">${tipo}</span>
+              ${subtipo}
+              ${estado}
+            </div>
+            <p class="source">${escapeHtml(item.textoOriginal || "")}</p>
+            ${detalles.join("")}
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderLegSummary(data) {
+      const cards = [
+        ["Resultados", data.count || 0],
+        ["Jurislex", data.jurislexCount || 0],
+        ["SIL", data.silCount || 0],
+        ["Página", data.page || 1],
+      ];
+
+      legSummary.innerHTML = cards.map(([label, value]) => `
+        <div class="summary-card">
+          <strong>${value}</strong>
+          <span>${label}</span>
+        </div>
+      `).join("");
+      legSummary.hidden = false;
+    }
+
+    function renderLegResults(items) {
+      if (!items.length) {
+        legResults.innerHTML = "";
+        legEmpty.hidden = false;
+        return;
+      }
+
+      legEmpty.hidden = true;
+      legResults.innerHTML = items.map((item) => {
+        const sil = item.sil || null;
+        const jurislex = item.jurislex || null;
+        const disponibleEn = Array.isArray(item.disponibleEn) ? item.disponibleEn.join(", ") : "";
+        return `
+          <article class="result">
+            <div class="result-head">
+              <span class="pill accent">${escapeHtml(item.rutaSugerida || "ruta")}</span>
+              ${disponibleEn ? `<span class="pill">${escapeHtml(disponibleEn)}</span>` : ""}
+              ${sil?.categoriaOrdenamiento ? `<span class="pill">${escapeHtml(sil.categoriaOrdenamiento)}</span>` : ""}
+              ${sil?.vigencia ? `<span class="pill warn">${escapeHtml(sil.vigencia)}</span>` : ""}
+            </div>
+            <p class="source">${escapeHtml(item.nombre || "")}</p>
+            ${jurislex ? `<p class="detail"><strong>Jurislex:</strong> idLegislacion ${escapeHtml(jurislex.idLegislacion)} · categoria ${escapeHtml(jurislex.categoria)}</p>` : ""}
+            ${sil ? `<p class="detail"><strong>SIL:</strong> id ${escapeHtml(sil.id)} · ${escapeHtml([sil.ambito, sil.estado].filter(Boolean).join(" / "))}</p>` : ""}
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function analyze() {
+      const texto = inputText.value.trim();
+      if (!texto) {
+        setError("Carga un archivo de texto o pega contenido antes de extraer citas.");
+        return;
+      }
+
+      setError("");
+      setStatus("Analizando texto con Ordina...");
+      analyzeBtn.disabled = true;
+
+      try {
+        const response = await fetch("/citas/extraer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto, fuente: currentSource }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "No se pudo procesar el texto.");
+        }
+
+        renderSummary(data.resumen || {});
+        renderResults(data.items || []);
+        setStatus(`Se detectaron ${data.resumen?.totalCitas || 0} citas en ${currentSource}.`);
+      } catch (error) {
+        summary.hidden = true;
+        results.innerHTML = "";
+        empty.hidden = false;
+        setError(error.message || "Ocurrió un error al extraer citas.");
+        setStatus("");
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    async function searchLegislacion() {
+      const params = new URLSearchParams({
+        nombre: legQuery.value.trim(),
+        page: "1",
+        size: "10",
+      });
+
+      if (legCategoria.value) params.set("categoriaOrdenamiento", legCategoria.value);
+      if (legAmbito.value) params.set("ambito", legAmbito.value);
+      if (legMateria.value.trim()) params.set("materia", legMateria.value.trim());
+      if (legEstado.value.trim()) params.set("estado", legEstado.value.trim());
+      if (legVigencia.value.trim()) params.set("vigencia", legVigencia.value.trim());
+
+      setLegError("");
+      setLegStatus("Buscando legislación en SIL...");
+      legSearchBtn.disabled = true;
+
+      try {
+        const response = await fetch(`/normas/buscar?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "No se pudo consultar legislación.");
+        }
+
+        renderLegSummary(data || {});
+        renderLegResults(data.items || []);
+        setLegStatus(`Se obtuvieron ${data.count || 0} normas para ${legQuery.value.trim() || "la búsqueda"}.`);
+      } catch (error) {
+        legSummary.hidden = true;
+        legResults.innerHTML = "";
+        legEmpty.hidden = false;
+        setLegStatus("");
+        setLegError(error.message || "Ocurrió un error al buscar legislación.");
+      } finally {
+        legSearchBtn.disabled = false;
+      }
+    }
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) {
+        return;
+      }
+
+      fileName.textContent = file.name;
+      currentSource = file.name;
+      setError("");
+      setStatus(`Leyendo ${file.name}...`);
+
+      try {
+        inputText.value = await file.text();
+        setStatus(`Archivo ${file.name} cargado. Ya puedes extraer citas.`);
+      } catch (error) {
+        setStatus("");
+        setError("No se pudo leer el archivo seleccionado. Usa un archivo de texto plano.");
+      }
+    });
+
+    analyzeBtn.addEventListener("click", analyze);
+    legSearchBtn.addEventListener("click", searchLegislacion);
+    clearBtn.addEventListener("click", () => {
+      inputText.value = "";
+      fileInput.value = "";
+      currentSource = "texto";
+      fileName.textContent = "Sin archivo cargado";
+      summary.hidden = true;
+      results.innerHTML = "";
+      empty.hidden = false;
+      setStatus("");
+      setError("");
+    });
+    legClearBtn.addEventListener("click", () => {
+      legQuery.value = "Electoral";
+      legCategoria.value = "LEY";
+      legAmbito.value = "FEDERAL";
+      legMateria.value = "";
+      legEstado.value = "";
+      legVigencia.value = "";
+      legSummary.hidden = true;
+      legResults.innerHTML = "";
+      legEmpty.hidden = false;
+      setLegStatus("");
+      setLegError("");
+    });
+  </script>
 </body>
 </html>

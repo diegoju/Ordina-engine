@@ -231,6 +231,12 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: debug
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Detalle normalizado de tesis
@@ -385,6 +391,717 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /legislacion/buscar:
+    get:
+      operationId: buscarLegislacionSCJN
+      summary: Buscar ordenamientos y leyes en SIL desde el buscador juridico SCJN
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Electoral
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: fuente
+          in: query
+          required: false
+          schema:
+            type: string
+            default: SIL
+        - name: indice
+          in: query
+          required: false
+          schema:
+            type: string
+            default: legislacion
+        - name: extractos
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+            default: 200
+        - name: semantica
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - name: categoriaOrdenamiento
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Valores separados por coma, por ejemplo LEY,CONSTITUCION.
+        - name: ambito
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Valores separados por coma, por ejemplo FEDERAL.
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: materia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: vigencia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado paginado normalizado de legislacion SIL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegislacionSearchResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarLegislacionSCJNAvanzado
+      summary: Buscar legislacion SIL con payload avanzado
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                q:
+                  type: string
+                page:
+                  type: integer
+                  minimum: 1
+                size:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                indice:
+                  type: string
+                fuente:
+                  type: string
+                extractos:
+                  type: integer
+                semantica:
+                  type: integer
+                filtros:
+                  type: object
+                  properties: {}
+                sortField:
+                  type: string
+                sortDireccion:
+                  type: string
+      responses:
+        "200":
+          description: Resultado paginado normalizado de legislacion SIL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegislacionSearchResponse"
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /normas/buscar:
+    get:
+      operationId: buscarNormasUnificadas
+      summary: Buscar normas unificando catalogo Jurislex y legislacion SIL
+      parameters:
+        - name: nombre
+          in: query
+          required: true
+          schema:
+            type: string
+          example: Ley de Amparo
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: categoriaOrdenamiento
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ambito
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: materia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: vigencia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: semantica
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado unificado de normas disponibles en ambas fuentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormasSearchResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarNormasUnificadasAvanzado
+      summary: Buscar normas unificadas con payload JSON
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                q:
+                  type: string
+                page:
+                  type: integer
+                  minimum: 1
+                size:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                categoriaOrdenamiento:
+                  type: string
+                ambito:
+                  type: string
+                estado:
+                  type: string
+                materia:
+                  type: string
+                vigencia:
+                  type: string
+                semantica:
+                  type: integer
+      responses:
+        "200":
+          description: Resultado unificado de normas disponibles en ambas fuentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormasSearchResponse"
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /normas/articulos/buscar:
+    get:
+      operationId: buscarArticulosNormaUnificada
+      summary: Buscar articulos de una norma resolviendo automaticamente Jurislex o SIL
+      parameters:
+        - name: nombre
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: articulo
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: categoriaOrdenamiento
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ambito
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: materia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: vigencia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: semantica
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Articulos encontrados con enrutamiento automatico de fuente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormasArticulosSearchResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarArticulosNormaUnificadaAvanzado
+      summary: Buscar articulos de una norma con payload JSON y enrutamiento automatico
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                qNorma:
+                  type: string
+                articulo:
+                  type: string
+                q:
+                  type: string
+                page:
+                  type: integer
+                size:
+                  type: integer
+                categoriaOrdenamiento:
+                  type: string
+                ambito:
+                  type: string
+                estado:
+                  type: string
+                materia:
+                  type: string
+                vigencia:
+                  type: string
+                semantica:
+                  type: integer
+      responses:
+        "200":
+          description: Articulos encontrados con enrutamiento automatico de fuente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormasArticulosSearchResponse"
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /normas/articulos/detalle:
+    get:
+      operationId: obtenerDetalleArticuloNormaUnificada
+      summary: Obtener detalle unificado de un articulo resolviendo automaticamente Jurislex o SIL
+      parameters:
+        - name: nombre
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: articulo
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: categoriaOrdenamiento
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ambito
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: materia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: vigencia
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: semantica
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Detalle unificado del articulo con estructura normativa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormaArticuloDetailResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Articulo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con fuente upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: obtenerDetalleArticuloNormaUnificadaAvanzado
+      summary: Obtener detalle unificado de un articulo con payload JSON
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                qNorma:
+                  type: string
+                articulo:
+                  type: string
+                q:
+                  type: string
+                page:
+                  type: integer
+                size:
+                  type: integer
+                categoriaOrdenamiento:
+                  type: string
+                ambito:
+                  type: string
+                estado:
+                  type: string
+                materia:
+                  type: string
+                vigencia:
+                  type: string
+                semantica:
+                  type: integer
+      responses:
+        "200":
+          description: Detalle unificado del articulo con estructura normativa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormaArticuloDetailResponse"
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Articulo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con fuente upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /legislacion/detalle:
+    get:
+      operationId: obtenerDetalleLegislacionSCJN
+      summary: Obtener el texto estructurado de un ordenamiento del indice de legislacion SCJN
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Detalle normalizado del ordenamiento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegislacionDetailResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /legislacion/articulos/buscar:
+    get:
+      operationId: buscarArticulosLegislacionSCJN
+      summary: Buscar artículos dentro de un ordenamiento del indice de legislacion SCJN
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: articulo
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Numero o referencia de articulo, por ejemplo 5 o articulo 5.
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Texto libre a buscar dentro del contenido del articulo.
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Articulos filtrados dentro del ordenamiento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegislacionArticulosSearchResponse"
+        "400":
+          description: Parametros invalidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error de conexion con buscador SCJN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /jurislex/decretos:
     get:
       operationId: obtenerDecretosJurislex
@@ -498,6 +1215,7 @@ paths:
     post:
       operationId: buscarArticulosJurislexAvanzado
       summary: Buscar articulos con payload avanzado Jurislex
+      description: Devuelve una respuesta normalizada similar a la del GET, pero sin garantizar `idLegislacion`, `indice` ni `elementos`.
       requestBody:
         required: true
         content:
@@ -536,7 +1254,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JurislexSearchResponse"
+                $ref: "#/components/schemas/JurislexSearchResponsePost"
         "400":
           description: Parametros invalidos
           content:
@@ -591,6 +1309,39 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Error de conexion con Jurislex
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citas/extraer:
+    post:
+      operationId: extraerCitasJuridicas
+      summary: Extraer citas de articulos leyes y jurisprudencia desde texto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                texto:
+                  type: string
+                  description: Texto juridico a analizar.
+                fuente:
+                  type: string
+                  description: Nombre opcional del archivo o fuente.
+              required:
+                - texto
+      responses:
+        "200":
+          description: Citas detectadas y normalizadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CitasExtractionResponse"
+        "400":
+          description: Texto faltante o invalido
           content:
             application/json:
               schema:
@@ -772,6 +1523,370 @@ components:
         - hasMore
         - items
 
+    LegislacionExtracto:
+      type: object
+      properties:
+        tipo:
+          type: string
+        texto:
+          type: string
+      required:
+        - tipo
+        - texto
+
+    LegislacionItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+        ordenamiento:
+          type: string
+        categoriaOrdenamiento:
+          type: string
+        ambito:
+          type: string
+        estado:
+          type: string
+        pais:
+          type: string
+        vigencia:
+          type: string
+        fechaPublicacion:
+          type: string
+        materias:
+          type: array
+          items:
+            type: string
+        resumen:
+          type: string
+        extractos:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegislacionExtracto"
+        textoSnippet:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    LegislacionSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        fuente:
+          type: string
+        indice:
+          type: string
+        semantica:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        count:
+          type: integer
+        hasMore:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegislacionItem"
+      required:
+        - total
+        - totalPages
+        - page
+        - size
+        - count
+        - hasMore
+        - items
+
+    LegislacionBloque:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+        orden:
+          type: integer
+          nullable: true
+        referencia:
+          type: string
+        numero:
+          type: integer
+          nullable: true
+        vigencia:
+          type: string
+        fechaActualizacion:
+          type: string
+        articuloVersion:
+          type: integer
+          nullable: true
+        contenido:
+          type: string
+        contenidoPlano:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    LegislacionDetailResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        ordenamiento:
+          type: string
+        categoriaOrdenamiento:
+          type: string
+        ambito:
+          type: string
+        estado:
+          type: string
+        pais:
+          type: string
+        vigencia:
+          type: string
+        fechaPublicacion:
+          type: string
+        fechaActualizacion:
+          type: string
+        materias:
+          type: array
+          items:
+            type: string
+        resumen:
+          type: string
+        totalBloques:
+          type: integer
+        bloques:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegislacionBloque"
+        raw:
+          type: object
+          properties: {}
+      required:
+        - id
+        - ordenamiento
+        - vigencia
+        - totalBloques
+        - bloques
+
+    LegislacionArticulosSearchResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        ordenamiento:
+          type: string
+        articulo:
+          type: string
+        query:
+          type: string
+        totalArticulos:
+          type: integer
+        count:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegislacionBloque"
+      required:
+        - id
+        - ordenamiento
+        - articulo
+        - query
+        - totalArticulos
+        - count
+        - items
+
+    JurislexNormaRef:
+      type: object
+      properties:
+        idLegislacion:
+          type: integer
+        categoria:
+          type: integer
+        nombre:
+          type: string
+
+    SilNormaRef:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+        ordenamiento:
+          type: string
+        categoriaOrdenamiento:
+          type: string
+        ambito:
+          type: string
+        estado:
+          type: string
+        vigencia:
+          type: string
+
+    NormaUnificadaItem:
+      type: object
+      properties:
+        nombre:
+          type: string
+        rutaSugerida:
+          type: string
+        disponibleEn:
+          type: array
+          items:
+            type: string
+        jurislex:
+          anyOf:
+            - $ref: "#/components/schemas/JurislexNormaRef"
+            - type: "null"
+        sil:
+          anyOf:
+            - $ref: "#/components/schemas/SilNormaRef"
+            - type: "null"
+      required:
+        - nombre
+        - rutaSugerida
+        - disponibleEn
+
+    NormasSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        page:
+          type: integer
+        size:
+          type: integer
+        count:
+          type: integer
+        jurislexCount:
+          type: integer
+        silCount:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/NormaUnificadaItem"
+      required:
+        - query
+        - page
+        - size
+        - count
+        - jurislexCount
+        - silCount
+        - items
+
+    NormasArticulosSearchResponse:
+      type: object
+      properties:
+        nombre:
+          type: string
+        articulo:
+          type: string
+        query:
+          type: string
+        fuenteUsada:
+          type: string
+        fuentesIntentadas:
+          type: array
+          items:
+            type: string
+        norma:
+          anyOf:
+            - $ref: "#/components/schemas/NormaUnificadaItem"
+            - type: "null"
+        count:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties: {}
+      required:
+        - nombre
+        - articulo
+        - query
+        - fuenteUsada
+        - fuentesIntentadas
+        - count
+        - items
+
+    NormaArticuloDetail:
+      type: object
+      properties:
+        numero:
+          type: integer
+          nullable: true
+        referencia:
+          type: string
+        ley:
+          type: string
+        libro:
+          type: string
+        titulo:
+          type: string
+        capitulo:
+          type: string
+        texto:
+          type: string
+        textoPlano:
+          type: string
+        meta:
+          type: object
+          properties: {}
+      required:
+        - referencia
+        - ley
+        - libro
+        - titulo
+        - capitulo
+        - texto
+        - textoPlano
+        - meta
+
+    NormaArticuloDetailResponse:
+      type: object
+      properties:
+        nombre:
+          type: string
+        articuloSolicitado:
+          type: string
+        query:
+          type: string
+        fuenteUsada:
+          type: string
+        norma:
+          $ref: "#/components/schemas/NormaUnificadaItem"
+        articulo:
+          $ref: "#/components/schemas/NormaArticuloDetail"
+        coincidencias:
+          type: integer
+        fuentesIntentadas:
+          type: array
+          items:
+            type: string
+        rawSearch:
+          type: object
+          properties: {}
+      required:
+        - nombre
+        - articuloSolicitado
+        - query
+        - fuenteUsada
+        - norma
+        - articulo
+        - coincidencias
+        - fuentesIntentadas
+
     ErrorResponse:
       type: object
       properties:
@@ -853,6 +1968,28 @@ components:
         - totalArticulos
         - items
 
+    JurislexSearchResponsePost:
+      type: object
+      properties:
+        categoria:
+          type: integer
+        count:
+          type: integer
+        total:
+          type: integer
+        totalArticulos:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JurislexItem"
+      required:
+        - categoria
+        - count
+        - total
+        - totalArticulos
+        - items
+
     JurislexDetailResponse:
       type: object
       properties:
@@ -880,3 +2017,98 @@ components:
         - idLegislacion
         - idArticulo
         - texto
+
+    CitaExtraida:
+      type: object
+      properties:
+        tipo:
+          type: string
+        subtipo:
+          type: string
+        textoOriginal:
+          type: string
+        inicio:
+          type: integer
+        fin:
+          type: integer
+        articulos:
+          type: array
+          items:
+            type: string
+        leyMencionada:
+          type: string
+        ley:
+          type: string
+        idLegislacion:
+          type: integer
+          nullable: true
+        categoria:
+          type: integer
+          nullable: true
+        registroDigital:
+          type: string
+        ius:
+          type: integer
+          nullable: true
+        clave:
+          type: string
+        claveCanonical:
+          type: string
+        rubro:
+          type: string
+        fuenteProbable:
+          type: string
+        localizacion:
+          type: string
+        resuelta:
+          type: boolean
+        confianza:
+          type: string
+        requiereConfirmacion:
+          type: boolean
+        motivoConfirmacion:
+          type: string
+        consultaSugerida:
+          type: string
+
+    CitasExtractionSummary:
+      type: object
+      properties:
+        totalCitas:
+          type: integer
+        articulos:
+          type: integer
+        jurisprudencias:
+          type: integer
+        tesis:
+          type: integer
+        articulosResueltos:
+          type: integer
+        requierenConfirmacion:
+          type: integer
+      required:
+        - totalCitas
+        - articulos
+        - jurisprudencias
+        - tesis
+        - articulosResueltos
+        - requierenConfirmacion
+
+    CitasExtractionResponse:
+      type: object
+      properties:
+        fuente:
+          type: string
+        textoAnalizado:
+          type: string
+        resumen:
+          $ref: "#/components/schemas/CitasExtractionSummary"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CitaExtraida"
+      required:
+        - fuente
+        - textoAnalizado
+        - resumen
+        - items

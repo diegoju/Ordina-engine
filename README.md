@@ -70,9 +70,9 @@ Si vienes del mundo técnico, empieza por `/ley`, `openapi-ordina-hub.yaml` o `m
 
 La mayoría de consultas siguen este orden:
 
-1. buscar una ley para obtener `idLegislacion` y `categoria`;
-2. buscar artículos con esos identificadores;
-3. pedir detalle si hace falta texto completo;
+1. buscar una norma con `/normas/buscar` para saber si conviene seguir por `Jurislex`, `SIL` o ambas;
+2. si la norma está en Jurislex, usar `idLegislacion` y `categoria` para artículos;
+3. si la norma sólo está en SIL o quieres navegar el documento completo, usar `/legislacion/*`;
 4. para jurisprudencia, buscar primero y luego consultar detalle por `ius`.
 
 Ejemplos típicos:
@@ -120,6 +120,74 @@ Ejemplo:
 ```bash
 curl --get "https://ordina-engine.vercel.app/ley" \
   --data-urlencode "nombre=constitución"
+```
+
+### Búsqueda unificada de normas
+
+Este es el flujo recomendado para legislación cuando no sabes de antemano si una norma está mejor cubierta por Jurislex o por SIL.
+
+- `GET /normas/buscar`
+- `POST /normas/buscar`
+
+Ejemplo:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/normas/buscar" \
+  --data-urlencode "nombre=ley de amparo"
+```
+
+La respuesta indica:
+
+- si la norma existe en `jurislex`;
+- si también existe en `sil`;
+- cuál es la `rutaSugerida` para el siguiente paso.
+
+### Búsqueda unificada de artículos
+
+Si ya sabes el nombre de la norma y el artículo que necesitas, Ordina puede decidir automáticamente si consultar `Jurislex` o `SIL`.
+
+- `GET /normas/articulos/buscar`
+- `POST /normas/articulos/buscar`
+
+Ejemplo por nombre de norma y artículo:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/normas/articulos/buscar" \
+  --data-urlencode "nombre=Ley de los Derechos de las Personas Adultas Mayores" \
+  --data-urlencode "articulo=50"
+```
+
+Ejemplo con filtros SIL:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/normas/articulos/buscar" \
+  --data-urlencode "nombre=Ley General del Sistema de Medios de Impugnacion en Materia Electoral" \
+  --data-urlencode "articulo=40" \
+  --data-urlencode "categoriaOrdenamiento=LEY" \
+  --data-urlencode "ambito=FEDERAL"
+```
+
+### Detalle unificado de artículo
+
+Si quieres una sola respuesta homogénea con `libro`, `titulo`, `capitulo` y el texto del artículo, usa:
+
+- `GET /normas/articulos/detalle`
+- `POST /normas/articulos/detalle`
+
+Ejemplos:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/normas/articulos/detalle" \
+  --data-urlencode "nombre=Ley de los Derechos de las Personas Adultas Mayores" \
+  --data-urlencode "articulo=50"
+```
+
+```bash
+curl --get "https://ordina-engine.vercel.app/normas/articulos/detalle" \
+  --data-urlencode "nombre=Ley General del Sistema de Medios de Impugnacion en Materia Electoral" \
+  --data-urlencode "articulo=40" \
+  --data-urlencode "categoriaOrdenamiento=LEY" \
+  --data-urlencode "ambito=FEDERAL"
 ```
 
 ### Jurisprudencia del SJF
@@ -174,6 +242,31 @@ curl --get "https://ordina-engine.vercel.app/jurislex/articulos/buscar" \
   --data-urlencode "soloArticulo=true"
 ```
 
+### Extracción de citas jurídicas
+
+Ordina también puede analizar texto libre para detectar citas de artículos, leyes, jurisprudencia, tesis y registros digitales.
+
+- `POST /citas/extraer`
+
+Ejemplo:
+
+```bash
+curl -X POST "https://ordina-engine.vercel.app/citas/extraer" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fuente": "demanda.txt",
+    "texto": "Con fundamento en el artículo 14 de la Ley de Amparo y el artículo 16 constitucional, así como en la jurisprudencia 2a./J. 5/2020 y el registro digital 2023456."
+  }'
+```
+
+La landing principal también incluye un frontend mínimo para pegar texto o cargar archivos de texto y revisar las citas detectadas.
+
+El extractor ahora también marca:
+
+- `confianza`: qué tan sólida parece la identificación;
+- `requiereConfirmacion`: cuándo conviene corroborar la cita detectada;
+- `ius` y `rubro` cuando encuentra coincidencia exacta en SJF para claves como `P./J. 53/2026 (12a.)`.
+
 ### Precedentes y ejecutorias de la SCJN
 
 - `GET /precedentes/buscar`
@@ -187,6 +280,51 @@ curl --get "https://ordina-engine.vercel.app/precedentes/buscar" \
   --data-urlencode "indice=ejecutorias" \
   --data-urlencode "page=1" \
   --data-urlencode "size=3"
+```
+
+### Legislación SIL en el buscador jurídico SCJN
+
+Sirve para consultar ordenamientos del índice de legislación del buscador jurídico de la SCJN, incluyendo filtros como ámbito, categoría y materia.
+
+- `GET /legislacion/buscar`
+- `POST /legislacion/buscar`
+- `GET /legislacion/detalle`
+- `GET /legislacion/articulos/buscar`
+
+Ejemplo:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/legislacion/buscar" \
+  --data-urlencode "q=Electoral" \
+  --data-urlencode "fuente=SIL" \
+  --data-urlencode "indice=legislacion" \
+  --data-urlencode "categoriaOrdenamiento=LEY" \
+  --data-urlencode "ambito=FEDERAL" \
+  --data-urlencode "page=1" \
+  --data-urlencode "size=10"
+```
+
+Detalle de un ordenamiento concreto:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/legislacion/detalle" \
+  --data-urlencode "id=9006"
+```
+
+Buscar un artículo específico dentro del ordenamiento:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/legislacion/articulos/buscar" \
+  --data-urlencode "id=9006" \
+  --data-urlencode "articulo=5"
+```
+
+También puedes combinar artículo y texto libre:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/legislacion/articulos/buscar" \
+  --data-urlencode "id=9006" \
+  --data-urlencode "q=constitucionalidad"
 ```
 
 ## OpenAPI
