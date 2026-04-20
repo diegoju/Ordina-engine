@@ -68,7 +68,7 @@ _RE_JURIS_CLAVE = re.compile(r"\b(?:jurisprudencia|tesis(?:\s+aislada)?|criterio
 _RE_J_CLAVE_COMPACTA = re.compile(r"\b(?:P\.|[12]a\.)/?J\.\s*\d+/\d{4}(?:\s*\(\d{1,2}a\.\))?(?!\w)", re.IGNORECASE)
 _RE_TESIS_AISLADA_CLAVE = re.compile(r"\b(?:criterio\s+aislad[oa]|tesis\s+aislada)\s+((?:P\.|[12]a\.)\s*[A-Z]{1,6}/\d{4}(?:\s*\(\d{1,2}a\.\))?)", re.IGNORECASE)
 _RE_ARTICULO_LEY = re.compile(
-    r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+[0-9]+[A-Za-z\-]*(?:\s*(?:,|y|e)\s*[0-9]+[A-Za-z\-]*)*(?:\s+bis|\s+ter|\s+qu[áa]ter)?(?:\s*,?\s*fracci[oó]n\s+[IVXLCDM]+)?)\s+(?:de(?:l| la| los| las)?|en)\s+(.+?)(?=(?:,?\s+(?:el\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|registro\s+digital)\b)|[.;:\n]|$)",
+    r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+[0-9]+[A-Za-z\-]*(?:\s*(?:,|y|e)\s*[0-9]+[A-Za-z\-]*)*(?:\s+bis|\s+ter|\s+qu[áa]ter)?(?:\s*,?\s*fracci[oó]n\s+[IVXLCDM]+)?)\s+(?:de(?:l| la| los| las)?|en)\s+(.+?)(?=(?:,?\s+(?:(?:y|e)\s+)?(?:(?:el|la|los|las)\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|criterio\s+aislad[oa]|registro\s+digital)\b)|[.;:\n]|$)",
     re.IGNORECASE,
 )
 _RE_ARTICULO_CONSTITUCION = re.compile(
@@ -746,6 +746,103 @@ def _enrich_jurisprudencial_cita(item: dict) -> dict:
     return item
 
 
+def _resolve_cita_articulo(cita: dict) -> Optional[dict]:
+    articulos = cita.get("articulos") or []
+    if not articulos:
+        return None
+    articulo = str(articulos[0])
+    nombre = str(cita.get("ley") or cita.get("leyMencionada") or "")
+    if not nombre:
+        return None
+
+    detail = _normas_articulos_detalle_core(
+        nombre=nombre,
+        articulo=articulo,
+        q=None,
+        page=1,
+        size=5,
+        include_raw=False,
+    )
+    if isinstance(detail, JSONResponse):
+        return None
+
+    articulo_detail = detail.get("articulo") or {}
+    return {
+        "tipo": "articulo",
+        "textoOriginal": cita.get("textoOriginal"),
+        "fuenteUsada": detail.get("fuenteUsada") or "",
+        "ley": articulo_detail.get("ley") or nombre,
+        "numero": articulo_detail.get("numero"),
+        "referencia": articulo_detail.get("referencia") or "",
+        "libro": articulo_detail.get("libro") or "",
+        "titulo": articulo_detail.get("titulo") or "",
+        "capitulo": articulo_detail.get("capitulo") or "",
+        "texto": articulo_detail.get("textoPlano") or articulo_detail.get("texto") or "",
+        "meta": articulo_detail.get("meta") or {},
+    }
+
+
+def _resolve_cita_jurisprudencial(cita: dict) -> Optional[dict]:
+    ius = cita.get("ius") or cita.get("registroDigital")
+    if ius is None:
+        return None
+    try:
+        ius_value = int(ius)
+    except Exception:
+        return None
+
+    detail = sjf_detail(ius=ius_value, isSemanal=None, hostName="https://sjf2.scjn.gob.mx", includeRaw=False, debug=False)
+    if isinstance(detail, JSONResponse):
+        return None
+
+    return {
+        "tipo": cita.get("tipo") or "jurisprudencia",
+        "textoOriginal": cita.get("textoOriginal"),
+        "ius": detail.get("ius") or ius_value,
+        "clave": cita.get("claveCanonical") or cita.get("clave") or "",
+        "rubro": detail.get("rubro") or cita.get("rubro") or "",
+        "fechaPublicacion": detail.get("fechaPublicacion") or "",
+        "texto": detail.get("textoPlano") or detail.get("texto") or "",
+        "fuenteUsada": "SJF",
+    }
+
+
+def _build_citas_report(citas: list[dict]) -> dict:
+    articulos_citados = []
+    criterios_citados = []
+    pendientes = []
+
+    for cita in citas:
+        if cita.get("tipo") == "articulo":
+            resolved = _resolve_cita_articulo(cita)
+            if resolved is not None:
+                articulos_citados.append(resolved)
+                continue
+        elif cita.get("tipo") in {"jurisprudencia", "tesis"}:
+            resolved = _resolve_cita_jurisprudencial(cita)
+            if resolved is not None:
+                criterios_citados.append(resolved)
+                continue
+
+        if cita.get("requiereConfirmacion") or not cita.get("resuelta"):
+            pendientes.append(
+                {
+                    "tipo": cita.get("tipo") or "",
+                    "textoOriginal": cita.get("textoOriginal") or "",
+                    "clave": cita.get("clave") or "",
+                    "registroDigital": cita.get("registroDigital") or "",
+                    "motivo": cita.get("motivoConfirmacion") or "no se pudo resolver automaticamente",
+                    "consultaSugerida": cita.get("consultaSugerida") or "",
+                }
+            )
+
+    return {
+        "articulosCitados": articulos_citados,
+        "criteriosCitados": criterios_citados,
+        "pendientesConfirmacion": pendientes,
+    }
+
+
 def _extract_citas(texto: str) -> list[dict]:
     citas: list[dict] = []
     seen: set[tuple] = set()
@@ -1220,11 +1317,12 @@ def _normas_buscar_core(
     semantica: int = 0,
     include_raw: bool = False,
 ) -> Any:
-    local_results = _buscar_ley_core(nombre=nombre)
+    sil_only_filters_active = any([categoria_ordenamiento, ambito, estado, materia, vigencia])
+    local_results = [] if sil_only_filters_active else _buscar_ley_core(nombre=nombre)
     sil_payload = _build_bj_legislacion_payload(
         q=nombre,
         page=page,
-        size=size,
+        size=max(size, 50),
         semantica=semantica,
         filtros=_build_bj_legislacion_filters(
             categoria_ordenamiento=categoria_ordenamiento,
@@ -1239,15 +1337,23 @@ def _normas_buscar_core(
         return sil_response
     sil_items = sil_response.get("items") or []
     merged_items = _merge_norma_sources(local_results, sil_items, nombre)
+    total = len(merged_items)
+    total_pages = max(1, int((total + size - 1) / size)) if size else 1
+    start = max(0, (page - 1) * size)
+    end = start + size
+    paged_items = merged_items[start:end]
 
     return {
         "query": nombre,
         "page": page,
         "size": size,
-        "count": len(merged_items),
+        "count": len(paged_items),
+        "total": total,
+        "totalPages": total_pages,
+        "hasMore": page < total_pages,
         "jurislexCount": len(local_results),
         "silCount": len(sil_items),
-        "items": merged_items,
+        "items": paged_items,
     }
 
 
@@ -2086,6 +2192,7 @@ def jurislex_detalle_articulo(
 def extraer_citas(payload: dict = Body(default={})):
     texto = str(payload.get("texto") or "")
     fuente = str(payload.get("fuente") or "texto")
+    resolver = _to_bool(payload.get("resolver"), False)
     texto_limpio = _strip_html(texto)
 
     if not texto_limpio.strip():
@@ -2094,7 +2201,7 @@ def extraer_citas(payload: dict = Body(default={})):
     citas = _extract_citas(texto_limpio)
     articulos_resueltos = [cita for cita in citas if cita.get("tipo") == "articulo" and cita.get("resuelta")]
 
-    return {
+    response = {
         "fuente": fuente,
         "textoAnalizado": texto_limpio,
         "resumen": {
@@ -2107,6 +2214,9 @@ def extraer_citas(payload: dict = Body(default={})):
         },
         "items": citas,
     }
+    if resolver:
+        response["reporte"] = _build_citas_report(citas)
+    return response
 
 
 @app.get("/")

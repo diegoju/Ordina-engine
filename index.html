@@ -736,9 +736,9 @@
     function renderLegSummary(data) {
       const cards = [
         ["Resultados", data.count || 0],
+        ["Total", data.total || 0],
         ["Jurislex", data.jurislexCount || 0],
         ["SIL", data.silCount || 0],
-        ["Página", data.page || 1],
       ];
 
       legSummary.innerHTML = cards.map(([label, value]) => `
@@ -761,12 +761,14 @@
       legResults.innerHTML = items.map((item) => {
         const sil = item.sil || null;
         const jurislex = item.jurislex || null;
-        const disponibleEn = Array.isArray(item.disponibleEn) ? item.disponibleEn.join(", ") : "";
+        const fuentes = Array.isArray(item.disponibleEn) ? item.disponibleEn : [];
+        const showFuentesPill = fuentes.length > 1 || (fuentes.length === 1 && fuentes[0] !== item.rutaSugerida);
+        const disponibleEn = fuentes.join(", ");
         return `
           <article class="result">
             <div class="result-head">
               <span class="pill accent">${escapeHtml(item.rutaSugerida || "ruta")}</span>
-              ${disponibleEn ? `<span class="pill">${escapeHtml(disponibleEn)}</span>` : ""}
+              ${showFuentesPill ? `<span class="pill">${escapeHtml(disponibleEn)}</span>` : ""}
               ${sil?.categoriaOrdenamiento ? `<span class="pill">${escapeHtml(sil.categoriaOrdenamiento)}</span>` : ""}
               ${sil?.vigencia ? `<span class="pill warn">${escapeHtml(sil.vigencia)}</span>` : ""}
             </div>
