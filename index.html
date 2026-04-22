@@ -485,6 +485,17 @@
       font-size: 14px;
     }
 
+    .file-state {
+      margin-top: 8px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(139,255,92,0.12);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
     .status,
     .error {
       margin-top: 14px;
@@ -564,7 +575,7 @@
         <h1>Ordina</h1>
 
         <p class="subtitle">
-          Sube un archivo de texto o pega tu escrito para detectar citas de artículos,
+          Sube un archivo de texto o un <code>.docx</code>, o pega tu escrito para detectar citas de artículos,
           leyes, jurisprudencia, tesis y registros digitales sin depender de GenAI.
         </p>
 
@@ -613,9 +624,11 @@
         <div class="controls">
           <div class="uploader">
             <label class="btn btn-secondary" for="fileInput">Subir archivo</label>
-            <input id="fileInput" type="file" accept=".txt,.md,.html,.htm,.json,.csv" hidden />
+            <input id="fileInput" type="file" accept=".txt,.md,.html,.htm,.json,.csv,.docx" hidden />
             <span id="fileName" class="file-name">Sin archivo cargado</span>
           </div>
+
+          <div id="fileState" class="file-state" hidden></div>
 
           <textarea id="inputText" placeholder="Pega aquí un escrito, demanda, concepto de violación o cualquier texto jurídico para que Ordina detecte las citas."></textarea>
 
@@ -719,6 +732,7 @@
   <script>
     const fileInput = document.getElementById("fileInput");
     const fileName = document.getElementById("fileName");
+    const fileState = document.getElementById("fileState");
     const inputText = document.getElementById("inputText");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const clearBtn = document.getElementById("clearBtn");
@@ -744,6 +758,7 @@
     const legEmpty = document.getElementById("legEmpty");
 
     let currentSource = "texto";
+    let loadedDocumentText = "";
 
     function setStatus(message) {
       statusBox.hidden = !message;
@@ -753,6 +768,11 @@
     function setError(message) {
       errorBox.hidden = !message;
       errorBox.textContent = message || "";
+    }
+
+    function setFileState(message) {
+      fileState.hidden = !message;
+      fileState.textContent = message || "";
     }
 
     function setLegStatus(message) {
@@ -772,6 +792,31 @@
         .replace(/>/g, "&gt;")
         .replace(/\"/g, "&quot;")
         .replace(/'/g, "&#39;");
+    }
+
+    function toBase64(bytes) {
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+      return btoa(binary);
+    }
+
+    async function extractDocxText(file) {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const response = await fetch("/documentos/extraer-texto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentBase64: toBase64(bytes) }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo extraer texto del archivo .docx.");
+      }
+      return data.texto || "";
     }
 
     function renderSummary(data) {
@@ -904,9 +949,9 @@
     }
 
     async function analyze() {
-      const texto = inputText.value.trim();
+      const texto = (loadedDocumentText || inputText.value).trim();
       if (!texto) {
-        setError("Carga un archivo de texto o pega contenido antes de extraer citas.");
+        setError("Carga un archivo o pega contenido antes de extraer citas.");
         return;
       }
 
@@ -990,16 +1035,38 @@
 
       fileName.textContent = file.name;
       currentSource = file.name;
+      loadedDocumentText = "";
       setError("");
       setStatus(`Leyendo ${file.name}...`);
 
       try {
-        inputText.value = await file.text();
+        const extension = file.name.toLowerCase().split(".").pop() || "";
+        if (extension === "docx") {
+          loadedDocumentText = await extractDocxText(file);
+        } else {
+          loadedDocumentText = await file.text();
+        }
+        inputText.value = "";
+        setFileState(`Archivo cargado: ${file.name}. Ordina analizará el contenido internamente y mostrará las citas detectadas, no el texto completo.`);
         setStatus(`Archivo ${file.name} cargado. Ya puedes extraer citas.`);
       } catch (error) {
+        loadedDocumentText = "";
+        inputText.value = "";
+        setFileState("");
         setStatus("");
-        setError("No se pudo leer el archivo seleccionado. Usa un archivo de texto plano.");
+        setError(error.message || "No se pudo leer el archivo seleccionado.");
       }
+    });
+
+    inputText.addEventListener("input", () => {
+      if (!inputText.value.trim() || !loadedDocumentText) {
+        return;
+      }
+      loadedDocumentText = "";
+      currentSource = "texto";
+      fileInput.value = "";
+      fileName.textContent = "Sin archivo cargado";
+      setFileState("");
     });
 
     analyzeBtn.addEventListener("click", analyze);
@@ -1008,7 +1075,9 @@
       inputText.value = "";
       fileInput.value = "";
       currentSource = "texto";
+      loadedDocumentText = "";
       fileName.textContent = "Sin archivo cargado";
+      setFileState("");
       summary.hidden = true;
       results.innerHTML = "";
       abbreviations.innerHTML = "";

@@ -1,18 +1,22 @@
 from fastapi import Body, FastAPI, Query, Request
+import base64
 import hashlib
 import html
 import httpx
+import io
 import json
 import logging
 import re
 import threading
 import unicodedata
+import zipfile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
 from urllib import parse
 from typing import Any, Optional
+from xml.etree import ElementTree
 
 logging.basicConfig(
     level=logging.INFO,
@@ -428,6 +432,65 @@ def _strip_html(value: Any) -> str:
     text = _RE_HTML_TAG.sub("", text)
     text = _RE_EXCESS_NEWLINES.sub("\n\n", text)
     return text.strip()
+
+
+def _extract_docx_text_from_xml(raw_xml: bytes) -> str:
+    try:
+        root = ElementTree.fromstring(raw_xml)
+    except Exception:
+        return ""
+
+    paragraphs: list[str] = []
+
+    for paragraph_node in root.iter():
+        if paragraph_node.tag.rsplit("}", 1)[-1] != "p":
+            continue
+        current_parts: list[str] = []
+        for node in paragraph_node.iter():
+            tag = node.tag.rsplit("}", 1)[-1]
+            if tag == "t":
+                current_parts.append(node.text or "")
+            elif tag == "tab":
+                current_parts.append("\t")
+            elif tag in {"br", "cr"}:
+                current_parts.append("\n")
+        paragraph = "".join(current_parts).strip()
+        if paragraph:
+            paragraphs.append(paragraph)
+
+    return "\n\n".join(paragraphs)
+
+
+def _extract_docx_text(content: bytes) -> str:
+    targets = [
+        "word/document.xml",
+        "word/footnotes.xml",
+        "word/endnotes.xml",
+        "word/header1.xml",
+        "word/header2.xml",
+        "word/header3.xml",
+        "word/footer1.xml",
+        "word/footer2.xml",
+        "word/footer3.xml",
+    ]
+    parts: list[str] = []
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            names = set(archive.namelist())
+            for target in targets:
+                if target not in names:
+                    continue
+                text = _extract_docx_text_from_xml(archive.read(target))
+                if text:
+                    parts.append(text)
+    except zipfile.BadZipFile:
+        return ""
+    except Exception:
+        return ""
+
+    merged = "\n\n".join(part for part in parts if part.strip())
+    return _RE_EXCESS_NEWLINES.sub("\n\n", merged).strip()
 
 
 def _jurislex_filter_raw(id_legislacion: int, articulo_numero: Optional[int] = None) -> str:
@@ -2353,6 +2416,35 @@ def jurislex_detalle_articulo(
     if includeRaw:
         response["raw"] = detail
     return response
+
+
+@app.post("/documentos/extraer-texto")
+def extraer_texto_documento(payload: dict = Body(default={})):
+    file_name = str(payload.get("fileName") or "").strip()
+    content_b64 = str(payload.get("contentBase64") or "")
+    extension = os.path.splitext(file_name)[1].lower()
+
+    if not file_name or not content_b64:
+        return JSONResponse(status_code=400, content={"error": "fileName y contentBase64 son requeridos"})
+
+    if extension != ".docx":
+        return JSONResponse(status_code=400, content={"error": "solo se soporta .docx en este endpoint"})
+
+    try:
+        content = base64.b64decode(content_b64)
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "contentBase64 invalido"})
+
+    texto = _extract_docx_text(content)
+    if not texto:
+        return JSONResponse(status_code=422, content={"error": "no se pudo extraer texto del archivo .docx"})
+
+    return {
+        "fileName": file_name,
+        "extension": extension,
+        "texto": texto,
+        "longitud": len(texto),
+    }
 
 @app.post("/citas/extraer")
 def extraer_citas(payload: dict = Body(default={})):
