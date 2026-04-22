@@ -244,8 +244,41 @@
       align-items: start;
     }
 
+    .stack {
+      margin-top: 24px;
+      display: grid;
+      gap: 24px;
+    }
+
     .panel {
       padding: 28px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .panel-kicker {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .panel-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     h2 {
@@ -354,6 +387,18 @@
       margin-top: 18px;
     }
 
+    .result-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .aside-stack {
+      display: grid;
+      gap: 16px;
+    }
+
     .results.tight {
       margin-top: 0;
     }
@@ -409,6 +454,37 @@
       line-height: 1.55;
     }
 
+    .quoted-text {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(11, 16, 32, 0.5);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text);
+      white-space: pre-wrap;
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .mini-item {
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .mini-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
     .status,
     .error {
       margin-top: 14px;
@@ -439,7 +515,8 @@
 
     @media (max-width: 920px) {
       .hero,
-      .workspace {
+      .workspace,
+      .result-grid {
         grid-template-columns: 1fr;
       }
 
@@ -515,13 +592,23 @@
       </div>
     </section>
 
-    <section id="extractor" class="workspace">
+    <section id="extractor" class="stack">
       <section class="card panel">
-        <h2>Extractor de citas</h2>
-        <p>
-          El frontend lee el archivo en tu navegador y envía el texto a Ordina para extraer citas.
-          Este MVP soporta archivos de texto como <code>.txt</code>, <code>.md</code>, <code>.html</code> y <code>.json</code>.
-        </p>
+        <div class="panel-header">
+          <div>
+            <span class="panel-kicker">Extractor</span>
+            <h2>Extracción de citas jurídicas</h2>
+            <p>
+              Carga un escrito y Ordina identifica artículos, leyes, jurisprudencia, tesis y registros digitales.
+              También detecta abreviaturas definidas dentro del documento para resolver citas posteriores como <code>LFT</code>, <code>LA</code> o <code>CPEUM</code>.
+            </p>
+          </div>
+          <div class="panel-meta stats">
+            <span>Texto libre y archivos</span>
+            <span>Resolución con texto citado</span>
+            <span>Abreviaturas por documento</span>
+          </div>
+        </div>
 
         <div class="controls">
           <div class="uploader">
@@ -538,7 +625,7 @@
           </div>
 
           <p class="hint">
-            Ejemplo: <code>artículo 14 de la Ley de Amparo</code>, <code>artículo 16 constitucional</code> o <code>registro digital 2023456</code>.
+            Ejemplo: <code>Ley Federal del Trabajo (LFT)</code>, luego <code>artículo 167-B de la LFT</code>.
           </p>
         </div>
 
@@ -546,14 +633,30 @@
         <div id="error" class="error" hidden></div>
       </section>
 
-      <aside class="card panel">
-        <h2>Resultados</h2>
-        <p>Ordina devuelve la cita detectada, su tipo y, cuando puede, la ley resuelta dentro del catálogo.</p>
+      <section class="result-grid">
+        <aside class="aside-stack">
+          <section class="card panel">
+            <h2>Resumen</h2>
+            <p>Vista rápida de la extracción actual.</p>
+            <div id="summary" class="summary-grid" hidden></div>
+            <p id="empty" class="empty">Todavía no hay resultados. Carga texto y ejecuta la extracción.</p>
+          </section>
 
-        <div id="summary" class="summary-grid" hidden></div>
-        <div id="results" class="results"></div>
-        <p id="empty" class="empty">Todavía no hay resultados. Carga texto y ejecuta la extracción.</p>
-      </aside>
+          <section class="card panel">
+            <h2>Abreviaturas detectadas</h2>
+            <p>Ordina aprovecha definiciones del propio documento para expandir siglas jurídicas.</p>
+            <div id="abbreviations" class="mini-list"></div>
+            <p id="abbreviationsEmpty" class="empty">Todavía no se detectan abreviaturas jurídicas en el texto.</p>
+          </section>
+        </aside>
+
+        <section class="card panel">
+          <h2>Resultados</h2>
+          <p>Se muestra la cita detectada y, cuando aplica, el texto citado resuelto. Los identificadores internos de catálogo quedan ocultos.</p>
+
+          <div id="results" class="results"></div>
+        </section>
+      </section>
     </section>
 
     <section class="workspace">
@@ -624,6 +727,8 @@
     const summary = document.getElementById("summary");
     const results = document.getElementById("results");
     const empty = document.getElementById("empty");
+    const abbreviations = document.getElementById("abbreviations");
+    const abbreviationsEmpty = document.getElementById("abbreviationsEmpty");
     const legQuery = document.getElementById("legQuery");
     const legCategoria = document.getElementById("legCategoria");
     const legAmbito = document.getElementById("legAmbito");
@@ -706,20 +811,17 @@
         if (item.ley) {
           detalles.push(`<p class="detail"><strong>Ley:</strong> ${escapeHtml(item.ley)}</p>`);
         }
+        if (item.resueltaPorAbreviatura && item.leyExpandida) {
+          detalles.push(`<p class="detail"><strong>Abreviatura expandida:</strong> ${escapeHtml(item.leyMencionada || "")} → ${escapeHtml(item.leyExpandida)}</p>`);
+        }
         if (item.registroDigital) {
           detalles.push(`<p class="detail"><strong>Registro digital:</strong> ${escapeHtml(item.registroDigital)}</p>`);
         }
         if (item.clave) {
           detalles.push(`<p class="detail"><strong>Clave:</strong> ${escapeHtml(item.clave)}</p>`);
         }
-        if (item.idLegislacion) {
-          detalles.push(`<p class="detail"><strong>idLegislacion:</strong> ${escapeHtml(item.idLegislacion)}</p>`);
-        }
-        if (item.categoria) {
-          detalles.push(`<p class="detail"><strong>categoria:</strong> ${escapeHtml(item.categoria)}</p>`);
-        }
-        if (item.textoCita) {
-          detalles.push(`<p class="detail"><strong>Texto citado:</strong> ${escapeHtml(item.textoCita)}</p>`);
+        if (item.rubro) {
+          detalles.push(`<p class="detail"><strong>Rubro:</strong> ${escapeHtml(item.rubro)}</p>`);
         }
 
         return `
@@ -731,9 +833,27 @@
             </div>
             <p class="source">${escapeHtml(item.textoOriginal || "")}</p>
             ${detalles.join("")}
+            ${item.textoCita ? `<div class="quoted-text">${escapeHtml(item.textoCita)}</div>` : ""}
           </article>
         `;
       }).join("");
+    }
+
+    function renderAbbreviations(items) {
+      if (!items.length) {
+        abbreviations.innerHTML = "";
+        abbreviationsEmpty.hidden = false;
+        return;
+      }
+
+      abbreviationsEmpty.hidden = true;
+      abbreviations.innerHTML = items.map((item) => `
+        <article class="mini-item">
+          <strong>${escapeHtml(item.abreviatura || "")}</strong>
+          <p class="detail">${escapeHtml(item.nombreResuelto || item.nombreDetectado || "")}</p>
+          <p class="detail">Origen: ${escapeHtml(item.fuente || "documento")}</p>
+        </article>
+      `).join("");
     }
 
     function renderLegSummary(data) {
@@ -807,11 +927,14 @@
         }
 
         renderSummary(data.resumen || {});
+        renderAbbreviations(data.abreviaturasDetectadas || []);
         renderResults(data.items || []);
         setStatus(`Se detectaron ${data.resumen?.totalCitas || 0} citas en ${currentSource}.`);
       } catch (error) {
         summary.hidden = true;
         results.innerHTML = "";
+        abbreviations.innerHTML = "";
+        abbreviationsEmpty.hidden = false;
         empty.hidden = false;
         setError(error.message || "Ocurrió un error al extraer citas.");
         setStatus("");
@@ -888,6 +1011,8 @@
       fileName.textContent = "Sin archivo cargado";
       summary.hidden = true;
       results.innerHTML = "";
+      abbreviations.innerHTML = "";
+      abbreviationsEmpty.hidden = false;
       empty.hidden = false;
       setStatus("");
       setError("");

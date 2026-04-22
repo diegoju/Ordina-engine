@@ -75,6 +75,17 @@ _RE_ARTICULO_CONSTITUCION = re.compile(
     r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+[0-9]+[A-Za-z\-]*(?:\s*(?:,|y|e)\s*[0-9]+[A-Za-z\-]*)*(?:\s+bis|\s+ter|\s+qu[áa]ter)?(?:\s*,?\s*fracci[oó]n\s+[IVXLCDM]+)?)\s+(?:constitucional|de la constituci[oó]n(?:\s+pol[ií]tica\s+de\s+los\s+estados\s+unidos\s+mexicanos)?)",
     re.IGNORECASE,
 )
+_RE_ABREVIATURA_PARENTESIS = re.compile(
+    r"([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9 ,.;:/\-]{10,180}?)\s*\(([A-Z][A-Z0-9.]{1,15})\)",
+)
+_RE_ABREVIATURA_EN_LO_SUCESIVO = re.compile(
+    r"([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9 ,.;:/\-]{10,180}?)(?:,\s*)?en\s+lo\s+sucesivo(?:,\s*)?(?:se\s+denominar[aá]|denominad[oa]\s+como|citad[oa]\s+como)?\s*[\"“”']([A-Z][A-Z0-9.]{1,15})[\"“”']",
+    re.IGNORECASE,
+)
+_RE_ABREVIATURA_GLOSARIO = re.compile(
+    r"^\s*([A-Z][A-Z0-9.]{1,15})\s*[:=]\s*([^\n]{6,180})$",
+    re.MULTILINE,
+)
 
 # TTL response cache — only for successful, read-only upstream queries
 _CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))  # seconds (default 5 min)
@@ -665,6 +676,120 @@ def _resolve_constitucion_reference() -> Optional[dict]:
     return None
 
 
+def _resolve_document_law_reference(raw_ley: str) -> Optional[dict]:
+    raw = str(raw_ley or "").strip()
+    if not raw:
+        return None
+    raw_norm = _normalize_text(raw)
+    if raw_norm in {
+        "constitucion politica de los estados unidos mexicanos",
+        "constitucion federal",
+        "cpeum",
+    }:
+        return _resolve_constitucion_reference()
+    return _resolve_ley_reference(raw)
+
+
+def _clean_abbreviation(value: str) -> str:
+    cleaned = str(value or "").strip().strip("()[]{}.,;: ")
+    if not cleaned:
+        return ""
+    if not re.fullmatch(r"[A-Z][A-Z0-9.]{1,15}", cleaned):
+        return ""
+    return cleaned
+
+
+def _register_abbreviation(
+    results: list[dict],
+    seen: set[tuple[str, str]],
+    abbreviation: str,
+    candidate_name: str,
+    start: int,
+    end: int,
+    source: str,
+) -> None:
+    abbr = _clean_abbreviation(abbreviation)
+    if not abbr:
+        return
+
+    resolved = _resolve_document_law_reference(candidate_name)
+    if resolved is None:
+        return
+
+    resolved_name = str(resolved.get("nombre") or "").strip()
+    detected_name = str(candidate_name or "").strip()
+    if resolved_name and _normalize_text(resolved_name) in _normalize_text(detected_name):
+        detected_name = resolved_name
+
+    key = (abbr, resolved_name)
+    if key in seen:
+        return
+    seen.add(key)
+    results.append(
+        {
+            "abreviatura": abbr,
+            "nombreDetectado": detected_name,
+            "nombreResuelto": resolved_name or detected_name,
+            "idLegislacion": resolved.get("id"),
+            "categoria": resolved.get("categoria"),
+            "inicio": start,
+            "fin": end,
+            "confianza": "alta",
+            "fuente": source,
+        }
+    )
+
+
+def _extract_document_abbreviations(texto: str) -> list[dict]:
+    abbreviations: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    for match in _RE_ABREVIATURA_PARENTESIS.finditer(texto):
+        _register_abbreviation(
+            abbreviations,
+            seen,
+            match.group(2),
+            match.group(1),
+            match.start(),
+            match.end(),
+            "parentesis",
+        )
+
+    for match in _RE_ABREVIATURA_EN_LO_SUCESIVO.finditer(texto):
+        _register_abbreviation(
+            abbreviations,
+            seen,
+            match.group(2),
+            match.group(1),
+            match.start(),
+            match.end(),
+            "enLoSucesivo",
+        )
+
+    for match in _RE_ABREVIATURA_GLOSARIO.finditer(texto):
+        _register_abbreviation(
+            abbreviations,
+            seen,
+            match.group(1),
+            match.group(2),
+            match.start(),
+            match.end(),
+            "glosario",
+        )
+
+    abbreviations.sort(key=lambda item: (item.get("inicio", 0), item.get("abreviatura", "")))
+    return abbreviations
+
+
+def _abbreviation_map(abbreviations: list[dict]) -> dict[str, dict]:
+    mapping: dict[str, dict] = {}
+    for item in abbreviations:
+        abbr = _clean_abbreviation(item.get("abreviatura") or "")
+        if abbr and abbr not in mapping:
+            mapping[abbr] = item
+    return mapping
+
+
 def _append_cita(citas: list[dict], seen: set[tuple], item: dict) -> None:
     key = (item.get("tipo"), item.get("inicio"), item.get("fin"), item.get("textoOriginal"))
     if key in seen:
@@ -874,10 +999,11 @@ def _build_citas_report(citas: list[dict]) -> dict:
     }
 
 
-def _extract_citas(texto: str) -> list[dict]:
+def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> list[dict]:
     citas: list[dict] = []
     seen: set[tuple] = set()
     constitucion = _resolve_constitucion_reference()
+    abbreviation_lookup = _abbreviation_map(abbreviations or [])
 
     for match in _RE_ARTICULO_CONSTITUCION.finditer(texto):
         texto_original = match.group(0)
@@ -904,6 +1030,13 @@ def _extract_citas(texto: str) -> list[dict]:
         articulo_fragmento = match.group(1)
         ley_fragmento = match.group(2).strip(" ,)")
         ley_resuelta = _resolve_ley_reference(ley_fragmento)
+        abbreviation = abbreviation_lookup.get(_clean_abbreviation(ley_fragmento))
+        if ley_resuelta is None and abbreviation is not None:
+            ley_resuelta = {
+                "id": abbreviation.get("idLegislacion"),
+                "categoria": abbreviation.get("categoria"),
+                "nombre": abbreviation.get("nombreResuelto") or abbreviation.get("nombreDetectado") or ley_fragmento,
+            }
         _append_cita(
             citas,
             seen,
@@ -916,6 +1049,8 @@ def _extract_citas(texto: str) -> list[dict]:
                 "articulos": _extract_article_numbers(articulo_fragmento),
                 "leyMencionada": ley_fragmento,
                 "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                "leyExpandida": (abbreviation or {}).get("nombreResuelto") or "",
+                "resueltaPorAbreviatura": abbreviation is not None and ley_resuelta is not None,
                 "idLegislacion": (ley_resuelta or {}).get("id"),
                 "categoria": (ley_resuelta or {}).get("categoria"),
                 "resuelta": ley_resuelta is not None,
@@ -2229,7 +2364,8 @@ def extraer_citas(payload: dict = Body(default={})):
     if not texto_limpio.strip():
         return JSONResponse(status_code=400, content={"error": "texto es requerido"})
 
-    citas = _extract_citas(texto_limpio)
+    abbreviations = _extract_document_abbreviations(texto_limpio)
+    citas = _extract_citas(texto_limpio, abbreviations=abbreviations)
 
     if resolver:
         citas = [_merge_cita_with_detalle(cita, _resolve_cita_detalle(cita)) for cita in citas]
@@ -2239,6 +2375,7 @@ def extraer_citas(payload: dict = Body(default={})):
     response = {
         "fuente": fuente,
         "textoAnalizado": texto_limpio,
+        "abreviaturasDetectadas": abbreviations,
         "resumen": {
             "totalCitas": len(citas),
             "articulos": sum(1 for cita in citas if cita.get("tipo") == "articulo"),
