@@ -255,7 +255,8 @@ curl -X POST "https://ordina-engine.vercel.app/citas/extraer" \
   -H "Content-Type: application/json" \
   -d '{
     "fuente": "demanda.txt",
-    "texto": "Con fundamento en el artículo 14 de la Ley de Amparo y el artículo 16 constitucional, así como en la jurisprudencia 2a./J. 5/2020 y el registro digital 2023456."
+    "texto": "Con fundamento en el artículo 14 de la Ley de Amparo y el artículo 16 constitucional, así como en la jurisprudencia 2a./J. 5/2020 y el registro digital 2023456.",
+    "resolver": true
   }'
 ```
 
@@ -266,6 +267,7 @@ El extractor ahora también marca:
 - `confianza`: qué tan sólida parece la identificación;
 - `requiereConfirmacion`: cuándo conviene corroborar la cita detectada;
 - `ius` y `rubro` cuando encuentra coincidencia exacta en SJF para claves como `P./J. 53/2026 (12a.)`.
+- `textoCita` cuando se envía `resolver=true` y Ordina logra recuperar el contenido del artículo o criterio citado.
 
 ### Precedentes y ejecutorias de la SCJN
 
