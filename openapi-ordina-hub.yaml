@@ -1331,6 +1331,9 @@ paths:
                 fuente:
                   type: string
                   description: Nombre opcional del archivo o fuente.
+                resolver:
+                  type: boolean
+                  description: Cuando es true, intenta resolver cada cita y agrega `textoCita` en los items resueltos.
               required:
                 - texto
       responses:
@@ -2055,6 +2058,8 @@ components:
         claveCanonical:
           type: string
         rubro:
+          type: string
+        textoCita:
           type: string
         fuenteProbable:
           type: string

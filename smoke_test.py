@@ -272,6 +272,7 @@ def check_citas_extraction():
         {
             "fuente": "smoke.txt",
             "texto": "Con fundamento en el artículo 14 de la Ley de Amparo, el artículo 16 constitucional y el registro digital 2023456.",
+            "resolver": True,
         },
     )
     if status != 200:
@@ -283,6 +284,8 @@ def check_citas_extraction():
         raise ValueError("sin articulo detectado")
     if not any(item.get("registroDigital") == "2023456" for item in items):
         raise ValueError("sin registro digital detectado")
+    if not any(item.get("tipo") == "articulo" and item.get("textoCita") for item in items):
+        raise ValueError("sin textoCita en articulos resueltos")
 
 
 def main():

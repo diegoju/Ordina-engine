@@ -807,6 +807,37 @@ def _resolve_cita_jurisprudencial(cita: dict) -> Optional[dict]:
     }
 
 
+def _resolve_cita_detalle(cita: dict) -> Optional[dict]:
+    if cita.get("tipo") == "articulo":
+        return _resolve_cita_articulo(cita)
+    if cita.get("tipo") in {"jurisprudencia", "tesis"}:
+        return _resolve_cita_jurisprudencial(cita)
+    return None
+
+
+def _merge_cita_with_detalle(cita: dict, detalle: Optional[dict]) -> dict:
+    if detalle is None:
+        return cita
+
+    enriched = dict(cita)
+    texto_cita = detalle.get("texto") or ""
+    if texto_cita:
+        enriched["textoCita"] = texto_cita
+    if detalle.get("fuenteUsada"):
+        enriched["fuenteUsada"] = detalle.get("fuenteUsada")
+    if cita.get("tipo") == "articulo":
+        if detalle.get("referencia"):
+            enriched["referencia"] = detalle.get("referencia")
+    elif cita.get("tipo") in {"jurisprudencia", "tesis"}:
+        if detalle.get("fechaPublicacion"):
+            enriched["fechaPublicacion"] = detalle.get("fechaPublicacion")
+        if detalle.get("rubro") and not enriched.get("rubro"):
+            enriched["rubro"] = detalle.get("rubro")
+        if detalle.get("ius") and not enriched.get("ius"):
+            enriched["ius"] = detalle.get("ius")
+    return enriched
+
+
 def _build_citas_report(citas: list[dict]) -> dict:
     articulos_citados = []
     criterios_citados = []
@@ -814,12 +845,12 @@ def _build_citas_report(citas: list[dict]) -> dict:
 
     for cita in citas:
         if cita.get("tipo") == "articulo":
-            resolved = _resolve_cita_articulo(cita)
+            resolved = _resolve_cita_detalle(cita)
             if resolved is not None:
                 articulos_citados.append(resolved)
                 continue
         elif cita.get("tipo") in {"jurisprudencia", "tesis"}:
-            resolved = _resolve_cita_jurisprudencial(cita)
+            resolved = _resolve_cita_detalle(cita)
             if resolved is not None:
                 criterios_citados.append(resolved)
                 continue
@@ -2199,6 +2230,10 @@ def extraer_citas(payload: dict = Body(default={})):
         return JSONResponse(status_code=400, content={"error": "texto es requerido"})
 
     citas = _extract_citas(texto_limpio)
+
+    if resolver:
+        citas = [_merge_cita_with_detalle(cita, _resolve_cita_detalle(cita)) for cita in citas]
+
     articulos_resueltos = [cita for cita in citas if cita.get("tipo") == "articulo" and cita.get("resuelta")]
 
     response = {
