@@ -2042,6 +2042,10 @@ components:
           type: string
         ley:
           type: string
+        leyExpandida:
+          type: string
+        resueltaPorAbreviatura:
+          type: boolean
         idLegislacion:
           type: integer
           nullable: true
@@ -2076,6 +2080,30 @@ components:
         consultaSugerida:
           type: string
 
+    AbreviaturaDetectada:
+      type: object
+      properties:
+        abreviatura:
+          type: string
+        nombreDetectado:
+          type: string
+        nombreResuelto:
+          type: string
+        idLegislacion:
+          type: integer
+          nullable: true
+        categoria:
+          type: integer
+          nullable: true
+        inicio:
+          type: integer
+        fin:
+          type: integer
+        confianza:
+          type: string
+        fuente:
+          type: string
+
     CitasExtractionSummary:
       type: object
       properties:
@@ -2106,6 +2134,10 @@ components:
           type: string
         textoAnalizado:
           type: string
+        abreviaturasDetectadas:
+          type: array
+          items:
+            $ref: "#/components/schemas/AbreviaturaDetectada"
         resumen:
           $ref: "#/components/schemas/CitasExtractionSummary"
         items:
@@ -2115,5 +2147,6 @@ components:
       required:
         - fuente
         - textoAnalizado
+        - abreviaturasDetectadas
         - resumen
         - items

@@ -271,7 +271,7 @@ def check_citas_extraction():
         "/citas/extraer",
         {
             "fuente": "smoke.txt",
-            "texto": "Con fundamento en el artículo 14 de la Ley de Amparo, el artículo 16 constitucional y el registro digital 2023456.",
+            "texto": "Con fundamento en la Ley de Amparo (LA), el artículo 14 de la LA, el artículo 16 constitucional y el registro digital 2023456.",
             "resolver": True,
         },
     )
@@ -280,12 +280,17 @@ def check_citas_extraction():
     if data.get("resumen", {}).get("totalCitas", 0) < 2:
         raise ValueError("se esperaban al menos 2 citas")
     items = data.get("items") or []
+    abbreviations = data.get("abreviaturasDetectadas") or []
     if not any(item.get("tipo") == "articulo" for item in items):
         raise ValueError("sin articulo detectado")
     if not any(item.get("registroDigital") == "2023456" for item in items):
         raise ValueError("sin registro digital detectado")
     if not any(item.get("tipo") == "articulo" and item.get("textoCita") for item in items):
         raise ValueError("sin textoCita en articulos resueltos")
+    if not any(item.get("abreviatura") == "LA" for item in abbreviations):
+        raise ValueError("sin abreviatura LA detectada")
+    if not any(item.get("tipo") == "articulo" and item.get("resueltaPorAbreviatura") for item in items):
+        raise ValueError("sin resolucion por abreviatura")
 
 
 def main():

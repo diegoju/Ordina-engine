@@ -268,6 +268,7 @@ El extractor ahora también marca:
 - `requiereConfirmacion`: cuándo conviene corroborar la cita detectada;
 - `ius` y `rubro` cuando encuentra coincidencia exacta en SJF para claves como `P./J. 53/2026 (12a.)`.
 - `textoCita` cuando se envía `resolver=true` y Ordina logra recuperar el contenido del artículo o criterio citado.
+- `abreviaturasDetectadas` y expansión de siglas del documento, por ejemplo `Ley Federal del Trabajo (LFT)` seguido de `artículo 167-B de la LFT`.
 
 ### Precedentes y ejecutorias de la SCJN
 
