@@ -157,6 +157,7 @@ paths:
     post:
       operationId: buscarArticulosJurislexAvanzado
       summary: Buscar articulos con payload avanzado Jurislex
+      description: Devuelve una respuesta normalizada similar a la del GET, pero sin garantizar `idLegislacion`, `indice` ni `elementos`.
       requestBody:
         required: true
         content:
@@ -195,7 +196,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JurislexSearchResponse"
+                $ref: "#/components/schemas/JurislexSearchResponsePost"
 
   /jurislex/articulos/detalle:
     get:
@@ -264,6 +265,22 @@ components:
         indice:
           type: integer
         elementos:
+          type: integer
+        count:
+          type: integer
+        total:
+          type: integer
+        totalArticulos:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JurislexItem"
+
+    JurislexSearchResponsePost:
+      type: object
+      properties:
+        categoria:
           type: integer
         count:
           type: integer

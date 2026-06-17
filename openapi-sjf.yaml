@@ -142,6 +142,12 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: debug
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Detalle normalizado de tesis

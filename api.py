@@ -67,16 +67,48 @@ BJ_SCJN_BASE = os.getenv("BJ_SCJN_BASE", "https://bj.scjn.gob.mx/api/v1/bj")
 _RE_WHITESPACE = re.compile(r"\s+")
 _RE_HTML_TAG = re.compile(r"<[^>]+>")
 _RE_EXCESS_NEWLINES = re.compile(r"\n{3,}")
+_RE_INLINE_NEWLINE = re.compile(r"(?<!\n)\n(?!\n)")
 _RE_REGISTRO_DIGITAL = re.compile(r"\bregistro\s+digital\s+(\d{6,8})\b", re.IGNORECASE)
 _RE_JURIS_CLAVE = re.compile(r"\b(?:jurisprudencia|tesis(?:\s+aislada)?|criterio\s+aislad[oa])\s+([A-Z0-9][A-Z0-9./\- ]{4,50}\d(?:\s*\([^\)]+\))?)", re.IGNORECASE)
 _RE_J_CLAVE_COMPACTA = re.compile(r"\b(?:P\.|[12]a\.)/?J\.\s*\d+/\d{4}(?:\s*\(\d{1,2}a\.\))?(?!\w)", re.IGNORECASE)
 _RE_TESIS_AISLADA_CLAVE = re.compile(r"\b(?:criterio\s+aislad[oa]|tesis\s+aislada)\s+((?:P\.|[12]a\.)\s*[A-Z]{1,6}/\d{4}(?:\s*\(\d{1,2}a\.\))?)", re.IGNORECASE)
+_RE_TESIS_CLAVE_COMPACTA = re.compile(r"\b(?:[12](?:a\.|ª)\s*[A-ZÁÉÍÓÚÑ]{1,6}/\d{4}(?:\s*\(\d{1,2}(?:a\.|ª)\))?)", re.IGNORECASE)
+_RE_EXPEDIENTE_SUP = re.compile(r"\bSUP-[A-Z]{2,6}(?:-[A-Z]{1,6})?-\d+/\d{4}\b", re.IGNORECASE)
+_RE_RUBRO = re.compile(r"\bde\s+rubro:\s*([^\n]{20,500})", re.IGNORECASE)
+_RE_ARTICULO_NORMA_INTERNA = re.compile(
+    r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+\d+[A-Za-z\-]*(?:\s*,?\s*(?:numerales?|incisos?|fracci[oó]n|p[aá]rrafo|último\s+p[aá]rrafo|transitorio)[^.;:]{0,80})?)\s+de(?:l| la| los| las)?\s+(Estatutos?|Reglamento(?:\s+Interno)?|Convocatoria)\b",
+    re.IGNORECASE,
+)
+_RE_BASE_CONVOCATORIA = re.compile(
+    r"\b(Base\s+[A-ZÁÉÍÓÚÑa-záéíóúñ\s]+?)\s+de\s+la\s+Convocatoria\b",
+    re.IGNORECASE,
+)
+_RE_NUMERAL_CONVOCATORIA = re.compile(
+    r"\b(numeral\s+\d+(?:\.\d+)*)\s+de\s+la\s+Convocatoria\b",
+    re.IGNORECASE,
+)
+_RE_TRANSITORIO = re.compile(
+    r"\b((?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|septimo|octavo|noveno|décimo|decimo)\s+transitorio)\b",
+    re.IGNORECASE,
+)
 _RE_ARTICULO_LEY = re.compile(
-    r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+[0-9]+[A-Za-z\-]*(?:\s*(?:,|y|e)\s*[0-9]+[A-Za-z\-]*)*(?:\s+bis|\s+ter|\s+qu[áa]ter)?(?:\s*,?\s*fracci[oó]n\s+[IVXLCDM]+)?)\s+(?:de(?:l| la| los| las)?|en)\s+(.+?)(?=(?:,?\s+(?:(?:y|e)\s+)?(?:(?:el|la|los|las)\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|criterio\s+aislad[oa]|registro\s+digital)\b)|[.;:\n]|$)",
+    r"\b((?:art(?:[íi]culo|\.)|articulos?)[^.;:]{0,180}?)\s+(?:de(?:l| la| los| las)?|en)\s+(.+?)(?=(?:,?\s+(?:(?:y|e)\s+)?(?:(?:el|la|los|las)\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|criterio\s+aislad[oa]|registro\s+digital|SUP-[A-Z]{2,6})\b)|[.;:]|$)",
+    re.IGNORECASE,
+)
+_RE_ARTICULO_CONTINUACION = re.compile(
+    r"(?:^|[\s,(;])((?:\d+[A-Za-z\-]*(?:\s*,?\s*(?:numerales?|incisos?|fracci[oó]n|p[aá]rrafo|último\s+p[aá]rrafo)[^.;:]{0,60})?))\s*,?\s*(?:de(?:l| la| los| las)?)\s+(.+?)(?=(?:,?\s+(?:(?:y|e)\s+)?(?:(?:el|la|los|las)\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|criterio\s+aislad[oa]|registro\s+digital|SUP-[A-Z]{2,6})\b)|[.;:]|$)",
+    re.IGNORECASE,
+)
+_RE_ARTICULO_Y_CONTINUACION = re.compile(
+    r"\by\s+(\d+[A-Za-z\-]*(?:\s*,?\s*(?:numerales?|incisos?|fracci[oó]n|p[aá]rrafo|último\s+p[aá]rrafo)[^.;:]{0,60})?)\s*,?\s*(?:de(?:l| la| los| las)?)\s+(.+?)(?=(?:,?\s+(?:(?:y|e)\s+)?(?:(?:el|la|los|las)\s+)?(?:art(?:[íi]culo|\.)|articulos?|jurisprudencia|tesis|criterio\s+aislad[oa]|registro\s+digital|SUP-[A-Z]{2,6})\b)|[.;:]|$)",
+    re.IGNORECASE,
+)
+_RE_ARTICULO_SERIE_LEY = re.compile(
+    r"\b((?:\d+[A-Za-z\-]*(?:\s*,?\s*(?:numerales?|incisos?|fracci[oó]n|p[aá]rrafo|último\s+p[aá]rrafo)[^.;:]{0,40})?(?:\s*,?\s*y\s+)?){1,4})\s+de(?:l| la| los| las)?\s+(Ley [A-ZÁÉÍÓÚÑ][^.;:]{5,180})",
     re.IGNORECASE,
 )
 _RE_ARTICULO_CONSTITUCION = re.compile(
-    r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+[0-9]+[A-Za-z\-]*(?:\s*(?:,|y|e)\s*[0-9]+[A-Za-z\-]*)*(?:\s+bis|\s+ter|\s+qu[áa]ter)?(?:\s*,?\s*fracci[oó]n\s+[IVXLCDM]+)?)\s+(?:constitucional|de la constituci[oó]n(?:\s+pol[ií]tica\s+de\s+los\s+estados\s+unidos\s+mexicanos)?)",
+    r"\b((?:art(?:[íi]culo|\.)|articulos?)[^.;:]{0,180}?)\s+(?:constitucional|de la constituci[oó]n(?:\s+general|\s+pol[ií]tica\s+de\s+los\s+estados\s+unidos\s+mexicanos)?)",
     re.IGNORECASE,
 )
 _RE_ABREVIATURA_PARENTESIS = re.compile(
@@ -89,6 +121,35 @@ _RE_ABREVIATURA_EN_LO_SUCESIVO = re.compile(
 _RE_ABREVIATURA_GLOSARIO = re.compile(
     r"^\s*([A-Z][A-Z0-9.]{1,15})\s*[:=]\s*([^\n]{6,180})$",
     re.MULTILINE,
+)
+_LEGAL_NAME_HINTS = (
+    "constitucion",
+    "ley",
+    "reglamento",
+    "codigo",
+    "convencion",
+    "pacto",
+    "carta",
+    "acuerdo",
+    "estatuto",
+)
+_NON_NORMATIVE_STARTS = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "setiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+    "la asociacion",
+    "el actor",
+    "la autoridad",
 )
 
 # TTL response cache — only for successful, read-only upstream queries
@@ -151,6 +212,99 @@ def _normalize_search_text(value: str) -> str:
     text = re.sub(r"[^\w]+", " ", text)
     text = _RE_WHITESPACE.sub(" ", text).strip()
     return text
+
+
+def _normalize_cita_clave(value: str) -> str:
+    text = str(value or "")
+    text = text.replace("ª", "a.").replace("º", "o.")
+    text = _RE_WHITESPACE.sub(" ", text).strip()
+    text = re.sub(r"\b([12])a\b", r"\1a.", text)
+    text = re.sub(r"\((\d{1,2})a\)", r"(\1a.)", text)
+    text = re.sub(r"\.{2,}", ".", text)
+    return text
+
+
+def _flatten_extraction_text(texto: str) -> str:
+    flattened = _RE_INLINE_NEWLINE.sub(" ", str(texto or ""))
+    return _RE_EXCESS_NEWLINES.sub("\n\n", flattened)
+
+
+def _looks_like_normative_name(value: str) -> bool:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return False
+    if normalized.startswith(_NON_NORMATIVE_STARTS):
+        return False
+    return any(hint in normalized for hint in _LEGAL_NAME_HINTS)
+
+
+def _clean_law_fragment(value: str) -> str:
+    fragment = str(value or "").strip(" ,)")
+    normalized = _normalize_text(fragment)
+    trailing_markers = [
+        ", los cuales establecen",
+        ", que define",
+        ", que definen",
+        ", por el que",
+        ", por la que",
+        " por regla general",
+        " establece que",
+        " establecen",
+        " toda vez que",
+        " al estimar que",
+        " puesto que",
+        " sin que ello",
+        " sin que esto",
+        " cuando hayan",
+    ]
+    for marker in trailing_markers:
+        marker_index = normalized.find(_normalize_text(marker))
+        if marker_index > 0:
+            fragment = fragment[:marker_index].rstrip(" ,")
+            normalized = _normalize_text(fragment)
+    alias_markers = {
+        "ley de medios": "Ley de Medios",
+        "constitucion general": "Constitución general",
+    }
+    for alias_norm, alias_text in alias_markers.items():
+        alias_index = normalized.find(alias_norm)
+        if alias_index >= 0:
+            return alias_text
+    return fragment
+
+
+def _extract_related_article_and_law(raw_fragment: str) -> tuple[str, str]:
+    fragment = _clean_citation_fragment(raw_fragment)
+    match = re.search(r"relaci[oó]n\s+con\s+(?:el|la)\s+(.+?)\s*,?\s+de\s+la\s+(.+)$", fragment, re.IGNORECASE)
+    if not match:
+        return "", fragment
+    return _clean_citation_fragment(match.group(1)), _clean_law_fragment(match.group(2))
+
+
+def _clean_citation_fragment(value: str) -> str:
+    return _RE_WHITESPACE.sub(" ", str(value or "").strip(" ,"))
+
+
+def _canonical_internal_text(fragmento: str, norma: str) -> str:
+    fragment = _clean_citation_fragment(fragmento)
+    norma_clean = _clean_citation_fragment(norma)
+    return f"{fragment} de {norma_clean}".strip()
+
+
+def _article_connector(ley_fragmento: str) -> str:
+    ley_norm = _normalize_text(ley_fragmento)
+    if ley_norm.startswith(("reglamento", "codigo", "pacto", "acuerdo", "estatuto")):
+        return "del"
+    return "de la"
+
+
+def _canonical_article_text(articulo_fragmento: str, ley_fragmento: str, *, constitucion: bool = False) -> str:
+    articulo = _clean_citation_fragment(articulo_fragmento)
+    ley = _clean_citation_fragment(ley_fragmento)
+    articulo = re.sub(r"^(?:y|e)\s+", "", articulo, flags=re.IGNORECASE)
+    if constitucion:
+        return f"{articulo} de la Constitución general".strip()
+    return f"{articulo} {_article_connector(ley)} {ley}".strip()
 
 
 _LEYES_INDEX = [
@@ -700,6 +854,21 @@ def _extract_article_numbers(fragment: str) -> list[str]:
     return re.findall(r"\d+[A-Za-z\-]*", str(fragment or ""))
 
 
+def _split_article_references(fragment: str) -> list[str]:
+    text = _clean_citation_fragment(fragment)
+    if not text:
+        return []
+
+    text = re.sub(r"^(?:art(?:[íi]culo|\.)|articulos?)\s+", "", text, flags=re.IGNORECASE)
+    chunks = re.split(r"\s+(?:en\s+relaci[oó]n\s+con\s+el|en\s+relaci[oó]n\s+con|y|e)\s+(?:(?:el|la)\s+)?(?=\d)", text, flags=re.IGNORECASE)
+    parts = []
+    for chunk in chunks:
+        cleaned = _clean_citation_fragment(chunk)
+        if cleaned:
+            parts.append(cleaned)
+    return parts
+
+
 def _resolve_ley_reference(raw_ley: str) -> Optional[dict]:
     ley_norm = _normalize_text(raw_ley)
     if not ley_norm:
@@ -748,8 +917,23 @@ def _resolve_document_law_reference(raw_ley: str) -> Optional[dict]:
         "constitucion politica de los estados unidos mexicanos",
         "constitucion federal",
         "cpeum",
+        "constitucion general",
     }:
         return _resolve_constitucion_reference()
+    manual_aliases = {
+        "ley de medios": {"nombre": "Ley General del Sistema de Medios de Impugnación en Materia Electoral"},
+        "ley de partidos": {"nombre": "Ley General de Partidos Políticos"},
+        "ley general de instituciones y procedimientos electorales": {"nombre": "Ley General de Instituciones y Procedimientos Electorales"},
+        "ley general de partidos politicos": {"nombre": "Ley General de Partidos Políticos"},
+        "ley general del sistema de medios de impugnacion en materia electoral": {"nombre": "Ley General del Sistema de Medios de Impugnación en Materia Electoral"},
+        "ley organica del poder judicial de la federacion": {"nombre": "Ley Orgánica del Poder Judicial de la Federación"},
+        "reglamento interno del tribunal electoral del poder judicial de la federacion": {"nombre": "Reglamento Interno del Tribunal Electoral del Poder Judicial de la Federación"},
+        "convencion americana sobre derechos humanos": {"nombre": "Convención Americana sobre Derechos Humanos"},
+        "pacto internacional de derechos civiles y politicos": {"nombre": "Pacto Internacional de Derechos Civiles y Políticos"},
+        "carta democratica interamericana": {"nombre": "Carta Democrática Interamericana"},
+    }
+    if raw_norm in manual_aliases:
+        return manual_aliases[raw_norm]
     return _resolve_ley_reference(raw)
 
 
@@ -873,8 +1057,48 @@ def _append_cita_if_not_contained(citas: list[dict], seen: set[tuple], item: dic
     _append_cita(citas, seen, item)
 
 
+def _append_split_article_citas(
+    citas: list[dict],
+    seen: set[tuple],
+    *,
+    articulo_fragmento: str,
+    ley_fragmento: str,
+    ley_resuelta: Optional[dict],
+    abbreviation: Optional[dict],
+    base_inicio: int,
+    base_fin: int,
+    subtipo: str,
+    constitucion: bool = False,
+) -> None:
+    references = _split_article_references(articulo_fragmento)
+    if len(references) <= 1:
+        return
+
+    for reference in references:
+        texto_original = _canonical_article_text(reference, ley_fragmento, constitucion=constitucion)
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": subtipo,
+                "textoOriginal": texto_original,
+                "inicio": base_inicio,
+                "fin": base_fin,
+                "articulos": _extract_article_numbers(reference),
+                "leyMencionada": ley_fragmento,
+                "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                "leyExpandida": (abbreviation or {}).get("nombreResuelto") or "",
+                "resueltaPorAbreviatura": abbreviation is not None and ley_resuelta is not None,
+                "idLegislacion": (ley_resuelta or {}).get("id"),
+                "categoria": (ley_resuelta or {}).get("categoria"),
+                "resuelta": constitucion or (ley_resuelta or {}).get("id") is not None,
+            },
+        )
+
+
 def _sjf_exact_match_for_clave(clave: str) -> Optional[dict]:
-    clave_norm = _normalize_search_text(clave)
+    clave_norm = _normalize_search_text(_normalize_cita_clave(clave))
     if not clave_norm:
         return None
 
@@ -891,7 +1115,7 @@ def _sjf_exact_match_for_clave(clave: str) -> Optional[dict]:
     docs = _extract_docs(data)
     for doc in docs:
         candidate = str(doc.get("claveTesis") or doc.get("tesis") or "")
-        if _normalize_search_text(candidate) == clave_norm:
+        if _normalize_search_text(_normalize_cita_clave(candidate)) == clave_norm:
             return {
                 "ius": doc.get("ius") or doc.get("registroDigital") or doc.get("id"),
                 "claveCanonical": candidate,
@@ -904,16 +1128,71 @@ def _sjf_exact_match_for_clave(clave: str) -> Optional[dict]:
     return None
 
 
+def _sjf_best_match_for_rubro(rubro: str) -> Optional[dict]:
+    rubro_limpio = _strip_html(rubro)
+    rubro_norm = _normalize_search_text(rubro_limpio)
+    if len(rubro_norm) < 20:
+        return None
+
+    status, data = _http_json(
+        f"{SJF_BASE}/tesis?page=0&size=10",
+        method="POST",
+        body=_default_sjf_payload(rubro_limpio),
+        headers=_sjf_headers(content_type=True),
+        use_cache=True,
+    )
+    if status >= 400:
+        return None
+
+    docs = _extract_docs(data)
+    best_match = None
+    best_score = 0.0
+    rubro_tokens = [token for token in rubro_norm.split(" ") if len(token) > 3]
+    if not rubro_tokens:
+        return None
+
+    for doc in docs:
+        candidate_rubro = _strip_html(doc.get("rubro") or "")
+        candidate_norm = _normalize_search_text(candidate_rubro)
+        if not candidate_norm:
+            continue
+        token_hits = sum(1 for token in rubro_tokens if token in candidate_norm)
+        coverage = token_hits / max(1, len(rubro_tokens))
+        if rubro_norm == candidate_norm:
+            coverage = 1.0
+        if coverage > best_score:
+            best_score = coverage
+            best_match = {
+                "ius": doc.get("ius") or doc.get("registroDigital") or doc.get("id"),
+                "claveCanonical": str(doc.get("claveTesis") or doc.get("tesis") or ""),
+                "rubro": candidate_rubro,
+                "fuente": doc.get("fuente") or "SJF",
+                "sala": doc.get("sala") or "",
+                "tipoTesis": doc.get("tipoTesis") or "",
+                "localizacion": doc.get("localizacion") or "",
+                "matchScore": coverage,
+            }
+
+    if best_match is None or best_score < 0.55:
+        return None
+    return best_match
+
+
 def _enrich_jurisprudencial_cita(item: dict) -> dict:
-    clave = str(item.get("clave") or "").strip()
-    if not clave:
+    clave = _normalize_cita_clave(str(item.get("clave") or ""))
+    rubro = _strip_html(item.get("rubro") or "")
+    item["clave"] = clave
+    if rubro:
+        item["rubro"] = rubro
+
+    if not clave and not rubro:
         item["confianza"] = "media"
         item["requiereConfirmacion"] = True
-        item["motivoConfirmacion"] = "cita jurisprudencial sin clave verificable"
+        item["motivoConfirmacion"] = "cita jurisprudencial sin clave ni rubro verificable"
         item["resuelta"] = False
         return item
 
-    match = _sjf_exact_match_for_clave(clave)
+    match = _sjf_exact_match_for_clave(clave) if clave else None
     if match is not None:
         item["resuelta"] = True
         item["confianza"] = "alta"
@@ -925,12 +1204,26 @@ def _enrich_jurisprudencial_cita(item: dict) -> dict:
         item["localizacion"] = match.get("localizacion")
         return item
 
+    rubro_match = _sjf_best_match_for_rubro(rubro) if rubro else None
+    if rubro_match is not None:
+        item["resuelta"] = True
+        item["confianza"] = "media"
+        item["requiereConfirmacion"] = True
+        item["motivoConfirmacion"] = "coincidencia probable por rubro; conviene confirmar la clave"
+        item["ius"] = rubro_match.get("ius")
+        item["claveCanonical"] = rubro_match.get("claveCanonical")
+        item["rubro"] = rubro_match.get("rubro") or rubro
+        item["fuenteProbable"] = rubro_match.get("fuente")
+        item["localizacion"] = rubro_match.get("localizacion")
+        item["resueltaPorRubro"] = True
+        return item
+
     item["resuelta"] = False
     item["confianza"] = "media"
     item["requiereConfirmacion"] = True
-    item["motivoConfirmacion"] = "clave detectada sin coincidencia exacta en SJF"
+    item["motivoConfirmacion"] = "no hubo coincidencia exacta por clave ni coincidencia suficiente por rubro en SJF"
     item["fuenteProbable"] = "SJF"
-    item["consultaSugerida"] = clave
+    item["consultaSugerida"] = clave or rubro
     return item
 
 
@@ -1067,9 +1360,88 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
     seen: set[tuple] = set()
     constitucion = _resolve_constitucion_reference()
     abbreviation_lookup = _abbreviation_map(abbreviations or [])
+    texto_busqueda = _flatten_extraction_text(texto)
 
-    for match in _RE_ARTICULO_CONSTITUCION.finditer(texto):
-        texto_original = match.group(0)
+    for match in _RE_ARTICULO_NORMA_INTERNA.finditer(texto_busqueda):
+        articulo_fragmento = match.group(1)
+        norma = _clean_citation_fragment(match.group(2))
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "normaInterna",
+                "textoOriginal": _canonical_internal_text(articulo_fragmento, norma),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "articulos": _extract_article_numbers(articulo_fragmento),
+                "leyMencionada": norma,
+                "ley": norma,
+                "resuelta": False,
+                "requiereConfirmacion": False,
+                "fuenteProbable": "normativa interna",
+            },
+        )
+
+    for match in _RE_BASE_CONVOCATORIA.finditer(texto_busqueda):
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "convocatoria",
+                "textoOriginal": _canonical_internal_text(match.group(1), "Convocatoria"),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "articulos": [],
+                "leyMencionada": "Convocatoria",
+                "ley": "Convocatoria",
+                "resuelta": False,
+                "requiereConfirmacion": False,
+                "fuenteProbable": "normativa interna",
+            },
+        )
+
+    for match in _RE_NUMERAL_CONVOCATORIA.finditer(texto_busqueda):
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "convocatoria",
+                "textoOriginal": _canonical_internal_text(match.group(1), "Convocatoria"),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "articulos": _extract_article_numbers(match.group(1)),
+                "leyMencionada": "Convocatoria",
+                "ley": "Convocatoria",
+                "resuelta": False,
+                "requiereConfirmacion": False,
+                "fuenteProbable": "normativa interna",
+            },
+        )
+
+    for match in _RE_TRANSITORIO.finditer(texto_busqueda):
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "transitorio",
+                "textoOriginal": _clean_citation_fragment(match.group(1)),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "articulos": [],
+                "leyMencionada": "Transitorio",
+                "ley": "Transitorio",
+                "resuelta": False,
+                "requiereConfirmacion": False,
+                "fuenteProbable": "normativa interna",
+            },
+        )
+
+    for match in _RE_ARTICULO_CONSTITUCION.finditer(texto_busqueda):
+        texto_original = _canonical_article_text(match.group(1), "Constitución general", constitucion=True)
         articulo_fragmento = match.group(1)
         _append_cita(
             citas,
@@ -1087,12 +1459,35 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
                 "resuelta": constitucion is not None,
             },
         )
+        _append_split_article_citas(
+            citas,
+            seen,
+            articulo_fragmento=articulo_fragmento,
+            ley_fragmento="Constitución general",
+            ley_resuelta=constitucion,
+            abbreviation=None,
+            base_inicio=match.start(),
+            base_fin=match.end(),
+            subtipo="constitucionSeparada",
+            constitucion=True,
+        )
 
-    for match in _RE_ARTICULO_LEY.finditer(texto):
-        texto_original = match.group(0)
+    for match in _RE_ARTICULO_LEY.finditer(texto_busqueda):
         articulo_fragmento = match.group(1)
-        ley_fragmento = match.group(2).strip(" ,)")
-        ley_resuelta = _resolve_ley_reference(ley_fragmento)
+        ley_fragmento_raw = match.group(2)
+        ley_fragmento = _clean_law_fragment(ley_fragmento_raw)
+        articulo_relacionado = ""
+        if _normalize_text(ley_fragmento_raw).startswith("relacion con el") or _normalize_text(ley_fragmento_raw).startswith("relacion con la"):
+            articulo_relacionado, ley_fragmento = _extract_related_article_and_law(ley_fragmento_raw)
+        texto_original = _canonical_article_text(articulo_fragmento, ley_fragmento)
+        ley_fragmento_norm = _normalize_text(ley_fragmento)
+        if any(token in ley_fragmento_norm for token in {"estatuto", "convocatoria"}):
+            continue
+        if ley_fragmento_norm in {"constitucion general", "constitucion politica de los estados unidos mexicanos"}:
+            continue
+        if "constitucion general" in ley_fragmento_norm and "ley general de instituciones y procedimientos electorales" in ley_fragmento_norm:
+            continue
+        ley_resuelta = _resolve_document_law_reference(ley_fragmento)
         abbreviation = abbreviation_lookup.get(_clean_abbreviation(ley_fragmento))
         if ley_resuelta is None and abbreviation is not None:
             ley_resuelta = {
@@ -1116,11 +1511,148 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
                 "resueltaPorAbreviatura": abbreviation is not None and ley_resuelta is not None,
                 "idLegislacion": (ley_resuelta or {}).get("id"),
                 "categoria": (ley_resuelta or {}).get("categoria"),
-                "resuelta": ley_resuelta is not None,
+                "resuelta": (ley_resuelta or {}).get("id") is not None,
+            },
+        )
+        _append_split_article_citas(
+            citas,
+            seen,
+            articulo_fragmento=articulo_fragmento,
+            ley_fragmento=ley_fragmento,
+            ley_resuelta=ley_resuelta,
+            abbreviation=abbreviation,
+            base_inicio=match.start(),
+            base_fin=match.end(),
+            subtipo="leySeparada",
+        )
+        if articulo_relacionado:
+            _append_cita(
+                citas,
+                seen,
+                {
+                    "tipo": "articulo",
+                    "subtipo": "relacionado",
+                    "textoOriginal": _canonical_article_text(articulo_relacionado, ley_fragmento),
+                    "inicio": match.start(),
+                    "fin": match.end(),
+                    "articulos": _extract_article_numbers(articulo_relacionado),
+                    "leyMencionada": ley_fragmento,
+                    "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                    "leyExpandida": (abbreviation or {}).get("nombreResuelto") or "",
+                    "resueltaPorAbreviatura": abbreviation is not None and ley_resuelta is not None,
+                    "idLegislacion": (ley_resuelta or {}).get("id"),
+                    "categoria": (ley_resuelta or {}).get("categoria"),
+                    "resuelta": (ley_resuelta or {}).get("id") is not None,
+                },
+            )
+
+    for match in _RE_ARTICULO_CONTINUACION.finditer(texto_busqueda):
+        articulo_fragmento = match.group(1)
+        ley_fragmento = _clean_law_fragment(match.group(2))
+        texto_original = _canonical_article_text(articulo_fragmento, ley_fragmento)
+        ley_fragmento_norm = _normalize_text(ley_fragmento)
+        if any(token in ley_fragmento_norm for token in {"estatuto", "convocatoria"}):
+            continue
+        if not _looks_like_normative_name(ley_fragmento):
+            continue
+        previous_slice = texto_busqueda[max(0, match.start(1) - 20):match.start(1)].lower()
+        if "art" in previous_slice:
+            continue
+        ley_resuelta = _resolve_document_law_reference(ley_fragmento)
+        abbreviation = abbreviation_lookup.get(_clean_abbreviation(ley_fragmento))
+        if ley_resuelta is None and abbreviation is not None:
+            ley_resuelta = {
+                "id": abbreviation.get("idLegislacion"),
+                "categoria": abbreviation.get("categoria"),
+                "nombre": abbreviation.get("nombreResuelto") or abbreviation.get("nombreDetectado") or ley_fragmento,
+            }
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "continuacion",
+                "textoOriginal": texto_original,
+                "inicio": match.start(1),
+                "fin": match.end(2),
+                "articulos": _extract_article_numbers(articulo_fragmento),
+                "leyMencionada": ley_fragmento,
+                "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                "leyExpandida": (abbreviation or {}).get("nombreResuelto") or "",
+                "resueltaPorAbreviatura": abbreviation is not None and ley_resuelta is not None,
+                "idLegislacion": (ley_resuelta or {}).get("id"),
+                "categoria": (ley_resuelta or {}).get("categoria"),
+                "resuelta": (ley_resuelta or {}).get("id") is not None,
             },
         )
 
-    for match in _RE_REGISTRO_DIGITAL.finditer(texto):
+    for match in _RE_ARTICULO_Y_CONTINUACION.finditer(texto_busqueda):
+        articulo_fragmento = match.group(1)
+        ley_fragmento = _clean_law_fragment(match.group(2))
+        texto_original = _canonical_article_text(articulo_fragmento, ley_fragmento)
+        previous_slice = texto_busqueda[max(0, match.start(1) - 30):match.start(1)].lower()
+        if "constitucion" in previous_slice:
+            continue
+        ley_fragmento_norm = _normalize_text(ley_fragmento)
+        if any(token in ley_fragmento_norm for token in {"estatuto", "convocatoria"}):
+            continue
+        if not _looks_like_normative_name(ley_fragmento):
+            continue
+        ley_resuelta = _resolve_document_law_reference(ley_fragmento)
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "continuacionY",
+                "textoOriginal": texto_original,
+                "inicio": match.start(1),
+                "fin": match.end(2),
+                "articulos": _extract_article_numbers(articulo_fragmento),
+                "leyMencionada": ley_fragmento,
+                "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                "leyExpandida": "",
+                "resueltaPorAbreviatura": False,
+                "idLegislacion": (ley_resuelta or {}).get("id"),
+                "categoria": (ley_resuelta or {}).get("categoria"),
+                "resuelta": (ley_resuelta or {}).get("id") is not None,
+            },
+        )
+
+    for match in _RE_ARTICULO_SERIE_LEY.finditer(texto_busqueda):
+        articulo_fragmento = match.group(1)
+        ley_fragmento = _clean_law_fragment(match.group(2))
+        texto_original = _canonical_article_text(articulo_fragmento, ley_fragmento)
+        previous_slice = texto_busqueda[max(0, match.start(1) - 20):match.start(1)].lower()
+        if "art" in previous_slice:
+            continue
+        ley_fragmento_norm = _normalize_text(ley_fragmento)
+        if any(token in ley_fragmento_norm for token in {"estatuto", "convocatoria"}):
+            continue
+        if not _looks_like_normative_name(ley_fragmento):
+            continue
+        ley_resuelta = _resolve_document_law_reference(ley_fragmento)
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "articulo",
+                "subtipo": "serieLey",
+                "textoOriginal": texto_original,
+                "inicio": match.start(1),
+                "fin": match.end(2),
+                "articulos": _extract_article_numbers(articulo_fragmento),
+                "leyMencionada": ley_fragmento,
+                "ley": (ley_resuelta or {}).get("nombre") or ley_fragmento,
+                "leyExpandida": "",
+                "resueltaPorAbreviatura": False,
+                "idLegislacion": (ley_resuelta or {}).get("id"),
+                "categoria": (ley_resuelta or {}).get("categoria"),
+                "resuelta": (ley_resuelta or {}).get("id") is not None,
+            },
+        )
+
+    for match in _RE_REGISTRO_DIGITAL.finditer(texto_busqueda):
         _append_cita(
             citas,
             seen,
@@ -1138,7 +1670,7 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
             },
         )
 
-    for match in _RE_TESIS_AISLADA_CLAVE.finditer(texto):
+    for match in _RE_TESIS_AISLADA_CLAVE.finditer(texto_busqueda):
         _append_cita_if_not_contained(
             citas,
             seen,
@@ -1152,10 +1684,12 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
             }),
         )
 
-    for match in _RE_JURIS_CLAVE.finditer(texto):
+    for match in _RE_JURIS_CLAVE.finditer(texto_busqueda):
         lower_text = match.group(0).lower()
         subtipo = "tesis" if ("tesis" in lower_text or "criterio aislado" in lower_text) else "jurisprudencia"
         subtype_label = "criterioAislado" if "criterio aislado" in lower_text else "clave"
+        window = texto_busqueda[match.end(): min(len(texto_busqueda), match.end() + 650)]
+        rubro_match = _RE_RUBRO.search(window)
         _append_cita_if_not_contained(
             citas,
             seen,
@@ -1166,10 +1700,13 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
                 "inicio": match.start(),
                 "fin": match.end(),
                 "clave": match.group(1).strip(),
+                "rubro": (rubro_match.group(1).strip() if rubro_match else ""),
             }),
         )
 
-    for match in _RE_J_CLAVE_COMPACTA.finditer(texto):
+    for match in _RE_J_CLAVE_COMPACTA.finditer(texto_busqueda):
+        window = texto_busqueda[match.end(): min(len(texto_busqueda), match.end() + 650)]
+        rubro_match = _RE_RUBRO.search(window)
         _append_cita_if_not_contained(
             citas,
             seen,
@@ -1180,7 +1717,42 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
                 "inicio": match.start(),
                 "fin": match.end(),
                 "clave": match.group(0).strip(),
+                "rubro": (rubro_match.group(1).strip() if rubro_match else ""),
             }),
+        )
+
+    for match in _RE_TESIS_CLAVE_COMPACTA.finditer(texto_busqueda):
+        window = texto_busqueda[match.end(): min(len(texto_busqueda), match.end() + 650)]
+        rubro_match = _RE_RUBRO.search(window)
+        _append_cita_if_not_contained(
+            citas,
+            seen,
+            _enrich_jurisprudencial_cita({
+                "tipo": "tesis",
+                "subtipo": "claveCompacta",
+                "textoOriginal": match.group(0),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "clave": match.group(0).strip(),
+                "rubro": (rubro_match.group(1).strip() if rubro_match else ""),
+            }),
+        )
+
+    for match in _RE_EXPEDIENTE_SUP.finditer(texto_busqueda):
+        _append_cita(
+            citas,
+            seen,
+            {
+                "tipo": "expediente",
+                "subtipo": "tepjf",
+                "textoOriginal": match.group(0),
+                "inicio": match.start(),
+                "fin": match.end(),
+                "clave": match.group(0),
+                "resuelta": False,
+                "confianza": "alta",
+                "fuenteProbable": "TEPJF",
+            },
         )
 
     citas.sort(key=lambda item: (item.get("inicio", 0), item.get("fin", 0)))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import unittest
 import json
 import subprocess
@@ -57,6 +58,9 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("consultaJuridicaCompleta", names)
         self.assertIn("buscarArticuloPorLeyYNumero", names)
         self.assertIn("buscarPrecedentes", names)
+        self.assertIn("buscarLegislacionSCJN", names)
+        self.assertIn("obtenerDetalleLegislacionSCJN", names)
+        self.assertIn("buscarArticulosLegislacionSCJN", names)
 
     def test_resources_list_contains_readme(self) -> None:
         result = mcp_server._dispatch("resources/list", {})
@@ -348,6 +352,131 @@ class McpHttpServerTests(unittest.TestCase):
         )
         self.assertEqual(responses[0]["jsonrpc"], "2.0")
         self.assertIn("tools", responses[0]["result"])
+
+
+class ApiHelperTests(unittest.TestCase):
+    """Tests for new helpers added during hardening."""
+
+    # --- _extract_results ---
+
+    def test_extract_results_finds_documents_key(self) -> None:
+        payload = {"documents": [{"ius": 1}, {"ius": 2}]}
+        self.assertEqual(api._extract_results(payload, "documents", "content"), [{"ius": 1}, {"ius": 2}])
+
+    def test_extract_results_finds_nested_under_data(self) -> None:
+        payload = {"data": {"content": [{"ius": 3}]}}
+        self.assertEqual(api._extract_results(payload, "documents", "content"), [{"ius": 3}])
+
+    def test_extract_results_returns_empty_for_non_dict(self) -> None:
+        self.assertEqual(api._extract_results(None, "documents"), [])  # type: ignore[arg-type]
+        self.assertEqual(api._extract_results([], "documents"), [])    # type: ignore[arg-type]
+
+    def test_extract_results_returns_empty_when_no_key_matches(self) -> None:
+        self.assertEqual(api._extract_results({"other": [1, 2]}, "documents", "content"), [])
+
+    def test_extract_docs_wrapper_uses_sjf_keys(self) -> None:
+        payload = {"content": [{"ius": 5}]}
+        self.assertEqual(api._extract_docs(payload), [{"ius": 5}])
+
+    def test_extract_bj_items_wrapper_uses_resultados_key(self) -> None:
+        payload = {"resultados": [{"registroDigital": 99}]}
+        self.assertEqual(api._extract_bj_items(payload), [{"registroDigital": 99}])
+
+    # --- TTL cache ---
+
+    def setUp(self) -> None:
+        api._cache.clear()
+
+    def test_set_cached_stores_entry(self) -> None:
+        key = api._cache_key("http://example.com", "GET", None)
+        api._set_cached(key, 200, {"ok": True})
+        self.assertIn(key, api._cache)
+
+    def test_get_cached_returns_stored_value(self) -> None:
+        key = api._cache_key("http://example.com/search", "POST", {"q": "amparo"})
+        api._set_cached(key, 200, {"items": []})
+        result = api._get_cached(key)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result[1], {"items": []})
+
+    def test_set_cached_does_not_store_errors(self) -> None:
+        key = api._cache_key("http://example.com/fail", "GET", None)
+        api._set_cached(key, 502, {"error": "boom"})
+        self.assertNotIn(key, api._cache)
+
+    def test_get_cached_returns_none_after_ttl(self) -> None:
+        key = api._cache_key("http://example.com/ttl", "GET", None)
+        # Manually insert an expired entry
+        api._cache[key] = (time.time() - api._CACHE_TTL - 1, 200, {"stale": True})
+        self.assertIsNone(api._get_cached(key))
+        self.assertNotIn(key, api._cache)
+
+    def test_cache_key_differs_by_body(self) -> None:
+        k1 = api._cache_key("http://x.com", "POST", {"q": "amparo"})
+        k2 = api._cache_key("http://x.com", "POST", {"q": "tesis"})
+        self.assertNotEqual(k1, k2)
+
+    def test_cache_key_same_for_identical_inputs(self) -> None:
+        k1 = api._cache_key("http://x.com", "POST", {"b": 2, "a": 1})
+        k2 = api._cache_key("http://x.com", "POST", {"a": 1, "b": 2})
+        self.assertEqual(k1, k2)  # sort_keys ensures stability
+
+
+class McpSuffixTests(unittest.TestCase):
+    """Tests for article suffix extraction and matching."""
+
+    def test_extract_article_suffix_returns_b_from_167_b(self) -> None:
+        self.assertEqual(mcp_server._extract_article_suffix("artículo 167-B"), "B")
+
+    def test_extract_article_suffix_returns_none_when_no_suffix(self) -> None:
+        self.assertIsNone(mcp_server._extract_article_suffix("artículo 167"))
+
+    def test_extract_article_suffix_returns_none_for_empty(self) -> None:
+        self.assertIsNone(mcp_server._extract_article_suffix(""))
+
+    def test_extract_article_number_still_returns_int_with_suffix(self) -> None:
+        self.assertEqual(mcp_server._extract_article_number("artículo 167-B"), 167)
+
+    def test_article_matches_number_matches_without_suffix(self) -> None:
+        item = {"numeroArticulo": 167}
+        self.assertTrue(mcp_server._article_matches_number(item, 167))
+
+    def test_article_matches_number_rejects_wrong_number(self) -> None:
+        item = {"numeroArticulo": 168}
+        self.assertFalse(mcp_server._article_matches_number(item, 167))
+
+    def test_article_matches_number_with_suffix_rejects_when_text_has_different_suffix(self) -> None:
+        # Item text mentions 167 (no B), but we're looking for 167-B
+        item = {"numeroArticulo": 167, "texto": "Artículo 167. Las obligaciones del patrón..."}
+        # Should reject because text doesn't contain "167-B"
+        self.assertFalse(mcp_server._article_matches_number(item, 167, suffix="B"))
+
+    def test_article_matches_number_with_suffix_accepts_when_text_has_matching_suffix(self) -> None:
+        item = {"numeroArticulo": 167, "texto": "Artículo 167-B. Disposiciones especiales..."}
+        self.assertTrue(mcp_server._article_matches_number(item, 167, suffix="B"))
+
+    def test_infer_consulta_metadata_captures_suffix(self) -> None:
+        metadata = mcp_server._infer_consulta_metadata(
+            "artículo 167-B de la Ley Federal del Trabajo", "auto", None, None
+        )
+        self.assertEqual(metadata["numeroArticulo"], 167)
+        self.assertEqual(metadata["articuloSufijo"], "B")
+
+    def test_rank_laws_cache_populated_on_second_call(self) -> None:
+        mcp_server._rank_laws_cache.clear()
+        leyes = [{"nombre": "Constitucion"}, {"nombre": "Codigo Civil"}]
+        mcp_server._rank_laws("constitucion", leyes)
+        cache_size_after_first = len(mcp_server._rank_laws_cache)
+        mcp_server._rank_laws("constitucion", leyes)
+        self.assertEqual(len(mcp_server._rank_laws_cache), cache_size_after_first)
+
+    def test_rank_laws_cache_returns_same_result(self) -> None:
+        mcp_server._rank_laws_cache.clear()
+        leyes = [{"nombre": "Constitucion"}, {"nombre": "Codigo Civil"}]
+        result1 = mcp_server._rank_laws("constitucion", leyes)
+        result2 = mcp_server._rank_laws("constitucion", leyes)
+        self.assertEqual(result1, result2)
 
 
 if __name__ == "__main__":

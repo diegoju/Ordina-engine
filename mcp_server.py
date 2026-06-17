@@ -69,10 +69,19 @@ def _normalize_match_text(value: Any) -> str:
     return ordina_api._normalize_text(str(value or ""))
 
 
+# Cache for _rank_laws keyed on (nombre_norm, number_of_laws).
+# Using a simple dict instead of lru_cache because leyes is a mutable list.
+_rank_laws_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
+
+
 def _rank_laws(nombre: str, leyes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     nombre_norm = _normalize_match_text(nombre)
     if not nombre_norm:
         return leyes
+
+    cache_key = (nombre_norm, len(leyes))
+    if cache_key in _rank_laws_cache:
+        return _rank_laws_cache[cache_key]
 
     query_tokens = [token for token in nombre_norm.split(" ") if token]
     whole_query_pattern = re.compile(rf"\b{re.escape(nombre_norm)}\b")
@@ -93,7 +102,9 @@ def _rank_laws(nombre: str, leyes: list[dict[str, Any]]) -> list[dict[str, Any]]
             return (4, len(law_name), law_norm)
         return (5, -token_count, len(law_name), law_norm)
 
-    return sorted(leyes, key=score)
+    result = sorted(leyes, key=score)
+    _rank_laws_cache[cache_key] = result
+    return result
 
 
 def _safe_int(value: Any, default: int) -> int:
@@ -103,20 +114,51 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
-def _article_matches_number(item: dict[str, Any], numero_articulo: int) -> bool:
-    return _safe_int(item.get("numeroArticulo"), -1) == int(numero_articulo)
+def _article_matches_number(
+    item: dict[str, Any], numero_articulo: int, suffix: Optional[str] = None
+) -> bool:
+    """Check if item's article number matches. When suffix is provided (e.g. 'B' from '167-B'),
+    also verifies the suffix appears in the item's text so that article 167 and 167-B can be
+    distinguished."""
+    if _safe_int(item.get("numeroArticulo"), -1) != int(numero_articulo):
+        return False
+    if suffix:
+        item_text = str(item.get("texto") or item.get("ley") or "").upper()
+        full_id = f"{numero_articulo}-{suffix.upper()}"
+        # Only reject if we can positively confirm the suffix doesn't match
+        if item_text and not re.search(rf"\b{re.escape(full_id)}\b", item_text):
+            return False
+    return True
+
+
+# Pre-compiled patterns for article number extraction
+_RE_ARTICLE_EXPLICIT = re.compile(r"\bart(?:iculo|\.)?\s+(\d+)(?:[- ]([a-z]))?\b", re.IGNORECASE)
+_RE_BARE_NUMBER = re.compile(r"\b(\d+)(?:[- ]([a-z]))?\b", re.IGNORECASE)
 
 
 def _extract_article_number(text: str) -> Optional[int]:
+    """Returns the base numeric part of an article reference (e.g. 167 from '167-B')."""
     if not text:
         return None
     text_norm = _normalize_match_text(text)
-    match = re.search(r"\bart(?:iculo|\.)?\s+(\d+)\b", text_norm, flags=re.IGNORECASE)
+    match = _RE_ARTICLE_EXPLICIT.search(text_norm)
     if match:
         return _safe_int(match.group(1), 0) or None
-    match = re.search(r"\b(\d+)\b", text_norm)
+    match = _RE_BARE_NUMBER.search(text_norm)
     if match:
         return _safe_int(match.group(1), 0) or None
+    return None
+
+
+def _extract_article_suffix(text: str) -> Optional[str]:
+    """Returns the alphabetic suffix from an article reference (e.g. 'B' from 'artículo 167-B'),
+    or None if the article has no suffix."""
+    if not text:
+        return None
+    text_norm = _normalize_match_text(text)
+    match = _RE_ARTICLE_EXPLICIT.search(text_norm)
+    if match and match.group(2):
+        return match.group(2).upper()
     return None
 
 
@@ -217,6 +259,7 @@ def _infer_consulta_metadata(
     numero_articulo: Optional[int],
 ) -> dict[str, Any]:
     inferred_numero = numero_articulo if numero_articulo is not None else _extract_article_number(consulta)
+    inferred_sufijo = _extract_article_suffix(consulta) if numero_articulo is None else None
     cleaned_query = _clean_article_query(consulta)
     inferred_law = nombre_ley or _extract_law_hint(cleaned_query)
     strategy = _infer_consulta_strategy(consulta, estrategia, inferred_law, inferred_numero)
@@ -244,6 +287,7 @@ def _infer_consulta_metadata(
         "reasons": reasons,
         "nombreLey": inferred_law,
         "numeroArticulo": inferred_numero,
+        "articuloSufijo": inferred_sufijo,
     }
 
 
@@ -266,6 +310,11 @@ def _resource_catalog_preview(limit: int = 25) -> str:
 def _resource_flow_guide() -> str:
     return (
         "Flujos recomendados de Ordina-engine\n\n"
+        "Reglas obligatorias\n"
+        "- No inventes datos, citas, rubros, articulos, ids, IUS ni textos juridicos.\n"
+        "- Si una llamada falla o no devuelve resultados, dilo claramente y no completes con suposiciones.\n"
+        "- Si solo tienes resultados de busqueda, responde solo con resultados de busqueda.\n"
+        "- Si necesitas texto completo o resumen sustantivo, primero trae el detalle correspondiente.\n\n"
         "1. Catalogo de leyes\n"
         "- Usa `buscarLey` para localizar una ley por nombre, id o categoria.\n"
         "- Si vas a consultar Jurislex, toma de ahi `idLegislacion` y `categoria`.\n\n"
@@ -282,6 +331,12 @@ def _resource_flow_guide() -> str:
         "4. Precedentes SCJN\n"
         "- Usa `buscarPrecedentes` para localizar ejecutorias o precedentes.\n"
         "- Si no hay resultados, indicalo claramente y no inventes datos.\n"
+        "- Para filtros avanzados usa `buscarPrecedentesAvanzado`.\n\n"
+        "5. Legislacion SCJN/SIL\n"
+        "- Usa `buscarLegislacionSCJN` para localizar ordenamientos del Buscador Juridico SCJN.\n"
+        "- Luego usa `obtenerDetalleLegislacionSCJN` con el `id` elegido para traer el ordenamiento.\n"
+        "- Para buscar articulos dentro del ordenamiento usa `buscarArticulosLegislacionSCJN` con el mismo `id`.\n"
+        "- No confundas `id` de documento SCJN/SIL con `idLegislacion` de Jurislex.\n"
     )
 
 
@@ -489,6 +544,64 @@ def buscar_precedentes_avanzado(payload: dict[str, Any], includeRaw: bool = Fals
     return _unwrap_fastapi_response(result)
 
 
+def buscar_legislacion_scjn(
+    q: str = "",
+    page: int = 1,
+    size: int = 10,
+    fuente: str = "SIL",
+    indice: str = "legislacion",
+    extractos: int = 200,
+    semantica: int = 0,
+    categoriaOrdenamiento: Optional[str] = None,
+    ambito: Optional[str] = None,
+    estado: Optional[str] = None,
+    materia: Optional[str] = None,
+    vigencia: Optional[str] = None,
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.scjn_legislacion_buscar(
+        q=q,
+        page=page,
+        size=size,
+        fuente=fuente,
+        indice=indice,
+        extractos=extractos,
+        semantica=semantica,
+        categoriaOrdenamiento=categoriaOrdenamiento,
+        ambito=ambito,
+        estado=estado,
+        materia=materia,
+        vigencia=vigencia,
+        includeRaw=includeRaw,
+    )
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_legislacion_scjn_avanzada(payload: dict[str, Any], includeRaw: bool = False) -> Any:
+    result = ordina_api.scjn_legislacion_buscar_post(includeRaw=includeRaw, payload=payload)
+    return _unwrap_fastapi_response(result)
+
+
+def obtener_detalle_legislacion_scjn(id: int, includeRaw: bool = False) -> Any:
+    result = ordina_api.scjn_legislacion_detalle(id=id, includeRaw=includeRaw)
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_articulos_legislacion_scjn(
+    id: int,
+    articulo: Optional[str] = None,
+    q: Optional[str] = None,
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.scjn_legislacion_articulos_buscar(
+        id=id,
+        articulo=articulo,
+        q=q,
+        includeRaw=includeRaw,
+    )
+    return _unwrap_fastapi_response(result)
+
+
 def buscar_decretos_jurislex(idLegislacion: int, idOrdenamiento: Optional[int] = None) -> Any:
     result = ordina_api.jurislex_decretos(idLegislacion=idLegislacion, idOrdenamiento=idOrdenamiento)
     return _unwrap_fastapi_response(result)
@@ -542,6 +655,7 @@ def buscar_articulo_por_ley_y_numero(
     numeroArticulo: int,
     maxLeyes: int = 5,
     includeRaw: bool = False,
+    articuloSufijo: Optional[str] = None,
 ) -> Any:
     leyes = _rank_laws(nombreLey, _law_matches(nombreLey))[: max(1, min(maxLeyes, 20))]
     if not leyes:
@@ -583,7 +697,7 @@ def buscar_articulo_por_ley_y_numero(
                 return fallback_search
             if isinstance(fallback_search, dict):
                 fallback_items = fallback_search.get("items", [])
-                exact_items = [item for item in fallback_items if _article_matches_number(item, numeroArticulo)]
+                exact_items = [item for item in fallback_items if _article_matches_number(item, numeroArticulo, articuloSufijo)]
                 if exact_items:
                     return {
                         "query": {"nombreLey": nombreLey, "numeroArticulo": numeroArticulo},
@@ -616,12 +730,14 @@ def obtener_articulo_por_ley_y_numero(
     numeroArticulo: int,
     maxLeyes: int = 5,
     includeRaw: bool = False,
+    articuloSufijo: Optional[str] = None,
 ) -> Any:
     search = buscar_articulo_por_ley_y_numero(
         nombreLey=nombreLey,
         numeroArticulo=numeroArticulo,
         maxLeyes=maxLeyes,
         includeRaw=includeRaw,
+        articuloSufijo=articuloSufijo,
     )
     if _result_is_error(search):
         return search
@@ -681,6 +797,7 @@ def consulta_juridica_completa(
             nombreLey=article_law_query,
             numeroArticulo=resolved_numero_articulo,
             includeRaw=includeRaw,
+            articuloSufijo=metadata.get("articuloSufijo"),
         )
         response = {
             "query": consulta,
@@ -790,7 +907,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "payload": {"type": "object"},
+                "payload": {"type": "object", "properties": {}, "additionalProperties": True},
                 "page": {"type": "integer", "minimum": 0},
                 "size": {"type": "integer", "minimum": 1, "maximum": 50},
                 "includeRaw": {"type": "boolean"},
@@ -855,13 +972,77 @@ TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "payload": {"type": "object"},
+                "payload": {"type": "object", "properties": {}, "additionalProperties": True},
                 "includeRaw": {"type": "boolean"},
             },
             "required": ["payload"],
             "additionalProperties": False,
         },
         "handler": buscar_precedentes_avanzado,
+    },
+    "buscarLegislacionSCJN": {
+        "description": "Busca ordenamientos y leyes en el Buscador Juridico SCJN/SIL. Usala cuando la consulta sea sobre legislacion SCJN, SIL u ordenamientos fuera del catalogo Jurislex.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string"},
+                "page": {"type": "integer", "minimum": 1},
+                "size": {"type": "integer", "minimum": 1, "maximum": 50},
+                "fuente": {"type": "string"},
+                "indice": {"type": "string"},
+                "extractos": {"type": "integer", "minimum": 0, "maximum": 1000},
+                "semantica": {"type": "integer", "minimum": 0, "maximum": 1},
+                "categoriaOrdenamiento": {"type": "string"},
+                "ambito": {"type": "string"},
+                "estado": {"type": "string"},
+                "materia": {"type": "string"},
+                "vigencia": {"type": "string"},
+                "includeRaw": {"type": "boolean"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": buscar_legislacion_scjn,
+    },
+    "buscarLegislacionSCJNAvanzada": {
+        "description": "Ejecuta busqueda avanzada de legislacion SCJN/SIL con payload completo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "object", "properties": {}, "additionalProperties": True},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_legislacion_scjn_avanzada,
+    },
+    "obtenerDetalleLegislacionSCJN": {
+        "description": "Obtiene el detalle completo de un ordenamiento del Buscador Juridico SCJN/SIL por `id` de documento.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "minimum": 1},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        "handler": obtener_detalle_legislacion_scjn,
+    },
+    "buscarArticulosLegislacionSCJN": {
+        "description": "Busca articulos dentro de un ordenamiento SCJN/SIL usando el `id` de documento obtenido con buscarLegislacionSCJN.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "minimum": 1},
+                "articulo": {"type": "string"},
+                "q": {"type": "string"},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_articulos_legislacion_scjn,
     },
     "buscarDecretosJurislex": {
         "description": "Obtiene decretos y anexos Jurislex por legislacion. Normalmente debes resolver antes `idLegislacion` con `buscarLey`.",
@@ -900,7 +1081,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "payload": {"type": "object"},
+                "payload": {"type": "object", "properties": {}, "additionalProperties": True},
             },
             "required": ["payload"],
             "additionalProperties": False,
@@ -923,12 +1104,13 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": obtener_detalle_articulo_jurislex,
     },
     "buscarArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre y busca articulos exactos por numero. Es la opcion mas segura cuando la persona pide un articulo de una ley pero no conoce `categoria` ni `idLegislacion`, por ejemplo 'articulo 1 del Codigo Penal de Oaxaca'.",
+        "description": "Resuelve una ley por nombre y busca articulos exactos por numero. Es la opcion mas segura cuando la persona pide un articulo de una ley pero no conoce `categoria` ni `idLegislacion`, por ejemplo 'articulo 1 del Codigo Penal de Oaxaca'. Si el articulo tiene sufijo (ej. '167-B'), pasa el numero base en `numeroArticulo` y la letra en `articuloSufijo`.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "nombreLey": {"type": "string"},
                 "numeroArticulo": {"type": "integer"},
+                "articuloSufijo": {"type": "string", "description": "Sufijo del articulo si aplica, ej. 'B' para el articulo '167-B'"},
                 "maxLeyes": {"type": "integer", "minimum": 1, "maximum": 20},
                 "includeRaw": {"type": "boolean"},
             },
@@ -938,14 +1120,15 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": buscar_articulo_por_ley_y_numero,
     },
     "obtenerArticuloPorLeyYNumero": {
-        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo. Es la mejor tool para 'dame el texto del articulo X de la ley Y'. Si el catalogo devuelve coincidencias para la entidad o materia pedida, usa esta tool antes de intentar web u otras fuentes.",
+        "description": "Resuelve una ley por nombre, busca un articulo exacto y devuelve tambien el detalle completo. Es la mejor tool para 'dame el texto del articulo X de la ley Y'. Si el catalogo devuelve coincidencias para la entidad o materia pedida, usa esta tool antes de intentar web u otras fuentes. Si el articulo tiene sufijo (ej. '167-B'), pasa el numero base en `numeroArticulo` y la letra en `articuloSufijo`.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "nombreLey": {"type": "string"},
                 "numeroArticulo": {"type": "integer"},
+                "articuloSufijo": {"type": "string", "description": "Sufijo del articulo si aplica, ej. 'B' para el articulo '167-B'"},
                 "maxLeyes": {"type": "integer", "minimum": 1, "maximum": 20},
-                "includeRaw": {"type": "boolean"}
+                "includeRaw": {"type": "boolean"},
             },
             "required": ["nombreLey", "numeroArticulo"],
             "additionalProperties": False,
@@ -999,7 +1182,7 @@ RESOURCES: dict[str, dict[str, Any]] = {
     },
     "ordina://guia-flujos": {
         "name": "Guia de flujos Ordina",
-        "description": "Como usar correctamente leyes, SJF, Jurislex y precedentes en MCP.",
+        "description": "Como usar correctamente leyes, SJF, Jurislex, precedentes y legislacion SCJN/SIL en MCP.",
         "mimeType": "text/plain",
         "loader": _resource_flow_guide,
     },
@@ -1012,10 +1195,12 @@ PROMPTS: dict[str, dict[str, Any]] = {
         "arguments": [],
         "builder": lambda _args: (
             "Usa Ordina-engine con este flujo: 1) si quieres delegar la decision inicial, usa consultaJuridicaCompleta; "
+            "no inventes datos, citas, ids ni textos juridicos; si una tool falla o solo devuelve busqueda, dilo claramente; "
             "2) si la consulta menciona una ley, primero usa buscarLey "
             "o resolverLeyPorNombre; 2) para articulos usa buscarArticuloPorLeyYNumero o buscarArticulosJurislex; "
             "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; si piden texto completo de una tesis, no te quedes en el resumen de busqueda y muestra `textoPlano` del detalle; "
-            "4) para precedentes usa buscarPrecedentes; 5) si buscarLey devuelve coincidencias utiles del catalogo, no saltes a web todavia; 6) si no hay resultados, dilo claramente y no inventes datos."
+            "4) para precedentes usa buscarPrecedentes; 5) para legislacion del Buscador Juridico SCJN/SIL usa buscarLegislacionSCJN, obtenerDetalleLegislacionSCJN y buscarArticulosLegislacionSCJN; "
+            "6) si buscarLey devuelve coincidencias utiles del catalogo, no saltes a web todavia; 7) si no hay resultados, dilo claramente y no inventes datos."
         ),
     },
     "buscar-articulo": {
