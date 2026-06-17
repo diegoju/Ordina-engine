@@ -285,6 +285,30 @@ curl --get "https://ordina-engine.vercel.app/precedentes/buscar" \
   --data-urlencode "size=3"
 ```
 
+### Sentencias del Tribunal Electoral (TEPJF)
+
+Busca sentencias del Buscador de Sentencias del TEPJF, con respuesta normalizada por expediente.
+
+- `GET /sentencias/buscar`
+- `POST /sentencias/buscar`
+
+Alias: `GET|POST /tepjf/sentencias/buscar`.
+
+Ejemplo:
+
+```bash
+curl --get "https://ordina-engine.vercel.app/sentencias/buscar" \
+  --data-urlencode "q=violencia politica|nulidad" \
+  --data-urlencode "page=1"
+```
+
+Notas:
+
+- `q` admite varios términos con operador AND separados por `|`.
+- Filtros opcionales: `sala`, `medio`, `anio`, `idMagistrado`, `sentidoResolucion`.
+- El campo `documentoUrl` de cada resultado apunta a la intranet del TEPJF y puede no ser accesible públicamente.
+- El sitio del TEPJF usa protección anti-bot; si las solicitudes son bloqueadas, configura `TEPJF_COOKIE`.
+
 ### Legislación SIL en el buscador jurídico SCJN
 
 Sirve para consultar ordenamientos del índice de legislación del buscador jurídico de la SCJN, incluyendo filtros como ámbito, categoría y materia.
@@ -364,6 +388,7 @@ Sólo son necesarias si alguna fuente bloquea solicitudes:
 - `SJF_COOKIE`
 - `JURISLEX_COOKIE`
 - `BJ_SCJN_COOKIE`
+- `TEPJF_COOKIE`
 
 ## MCP
 

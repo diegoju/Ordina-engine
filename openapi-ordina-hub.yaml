@@ -391,6 +391,133 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /sentencias/buscar:
+    get:
+      operationId: buscarSentenciasTEPJF
+      summary: Buscar sentencias del Tribunal Electoral (TEPJF)
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Terminos AND; usa | para varios (ej. nulidad|computo)
+          schema:
+            type: string
+          example: violencia politica|nulidad
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: sala
+          in: query
+          required: false
+          description: sup, sg, sx, sdf, st, sm, scm, sre
+          schema:
+            type: string
+        - name: medio
+          in: query
+          required: false
+          description: jdc, rec, jrc, rap, je...
+          schema:
+            type: string
+        - name: anio
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: idMagistrado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sentidoResolucion
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: tipo
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 2
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Resultado paginado normalizado de sentencias TEPJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentenciasSearchResponse"
+        "502":
+          description: Error de conexion con el buscador TEPJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: buscarSentenciasTEPJFAvanzado
+      summary: Buscar sentencias TEPJF con payload avanzado
+      parameters:
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                and:
+                  type: string
+                  description: Terminos AND unidos por |
+                or:
+                  type: string
+                  description: Terminos OR unidos por |
+                q:
+                  type: string
+                  description: Alias de and
+                type:
+                  type: integer
+                page:
+                  type: integer
+                  minimum: 1
+                sala:
+                  type: string
+                medio:
+                  type: string
+                anio:
+                  type: string
+                idMagistrado:
+                  type: string
+                sentidoResolucion:
+                  type: string
+      responses:
+        "200":
+          description: Resultado paginado normalizado de sentencias TEPJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentenciasSearchResponse"
+        "502":
+          description: Error de conexion con el buscador TEPJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /legislacion/buscar:
     get:
       operationId: buscarLegislacionSCJN
@@ -2107,6 +2234,85 @@ components:
         - articulo
         - coincidencias
         - fuentesIntentadas
+
+    SentenciaItem:
+      type: object
+      properties:
+        expediente:
+          type: string
+        sala:
+          type: string
+        medio:
+          type: string
+        anio:
+          type: string
+        fechaResolucion:
+          type: string
+        fechaRecepcion:
+          type: string
+        magistrado:
+          type: string
+        secretario:
+          type: string
+        actor:
+          type: string
+        autoridad:
+          type: string
+        entidad:
+          type: string
+        actoImpugnado:
+          type: string
+        sentidoResolucion:
+          type: string
+        tematica:
+          type: string
+        tipoVotacion:
+          type: string
+        resumen:
+          type: string
+        documentoUrl:
+          type: string
+        raw:
+          type: object
+          properties: {}
+
+    SentenciasSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        count:
+          type: integer
+        hasMore:
+          type: boolean
+        salas:
+          type: array
+          items: {}
+        medios:
+          type: array
+          items: {}
+        anios:
+          type: array
+          items: {}
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SentenciaItem"
+      required:
+        - total
+        - totalPages
+        - page
+        - count
+        - hasMore
+        - items
 
     ErrorResponse:
       type: object

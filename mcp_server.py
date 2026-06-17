@@ -224,6 +224,9 @@ def _build_consulta_summary(strategy_used: str, result: Any) -> str:
     if strategy_used == "precedente":
         return f'Precedentes localizados: {nested.get("count", 0)} coincidencias'
 
+    if strategy_used == "sentencia":
+        return f'Sentencias TEPJF localizadas: {nested.get("count", 0)} en pagina (total {nested.get("total", 0)})'
+
     selected_law = nested.get("selectedLaw") or {}
     if selected_law:
         return f'Ley localizada: {selected_law.get("nombre", "sin nombre")}'
@@ -237,18 +240,24 @@ def _infer_consulta_strategy(
     numero_articulo: Optional[int],
 ) -> str:
     estrategia_norm = (estrategia or "auto").strip().lower()
-    if estrategia_norm in {"ley", "articulo", "jurisprudencia", "precedente"}:
+    if estrategia_norm in {"ley", "articulo", "jurisprudencia", "precedente", "sentencia"}:
         return estrategia_norm
 
     consulta_norm = _normalize_match_text(consulta)
-    if numero_articulo is not None or nombre_ley:
-        return "articulo"
-    if any(token in consulta_norm for token in ["articulo ", "art. ", "art "]):
-        return "articulo"
+    # Las palabras de intencion explicita ganan sobre la pista de ley inferida por regex.
+    if any(
+        token in consulta_norm
+        for token in ["sentencia", "tepjf", "tribunal electoral", "sala superior", "sala regional", "materia electoral"]
+    ):
+        return "sentencia"
     if any(token in consulta_norm for token in ["jurisprudencia", "ius", "tesis", "sjf"]):
         return "jurisprudencia"
     if any(token in consulta_norm for token in ["precedente", "precedentes", "ejecutoria", "ejecutorias"]):
         return "precedente"
+    if numero_articulo is not None or nombre_ley:
+        return "articulo"
+    if any(token in consulta_norm for token in ["articulo ", "art. ", "art "]):
+        return "articulo"
     return "ley"
 
 
@@ -277,6 +286,9 @@ def _infer_consulta_metadata(
         confidence = "alta"
     elif strategy == "precedente":
         reasons.append("La consulta menciona precedentes o ejecutorias")
+        confidence = "alta"
+    elif strategy == "sentencia":
+        reasons.append("La consulta menciona sentencias o materia electoral (TEPJF)")
         confidence = "alta"
     else:
         reasons.append("Se usara resolucion de ley por nombre como estrategia base")
@@ -541,6 +553,36 @@ def buscar_precedentes(
 
 def buscar_precedentes_avanzado(payload: dict[str, Any], includeRaw: bool = False) -> Any:
     result = ordina_api.scjn_precedentes_buscar_post(includeRaw=includeRaw, payload=payload)
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_sentencias_tepjf(
+    q: str = "",
+    page: int = 1,
+    sala: str = "",
+    medio: str = "",
+    anio: str = "",
+    idMagistrado: str = "",
+    sentidoResolucion: str = "",
+    tipo: int = 2,
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.tepjf_sentencias_buscar(
+        q=q,
+        page=page,
+        sala=sala,
+        medio=medio,
+        anio=anio,
+        idMagistrado=idMagistrado,
+        sentidoResolucion=sentidoResolucion,
+        tipo=tipo,
+        includeRaw=includeRaw,
+    )
+    return _unwrap_fastapi_response(result)
+
+
+def buscar_sentencias_tepjf_avanzado(payload: dict[str, Any], includeRaw: bool = False) -> Any:
+    result = ordina_api.tepjf_sentencias_buscar_post(includeRaw=includeRaw, payload=payload)
     return _unwrap_fastapi_response(result)
 
 
@@ -839,6 +881,18 @@ def consulta_juridica_completa(
         response["summary"] = _build_consulta_summary(strategy_used, response)
         return response
 
+    if strategy_used == "sentencia":
+        result = buscar_sentencias_tepjf(q=consulta, includeRaw=includeRaw)
+        response = {
+            "query": consulta,
+            "strategyUsed": strategy_used,
+            "confidence": metadata["confidence"],
+            "reasons": metadata["reasons"],
+            "result": result,
+        }
+        response["summary"] = _build_consulta_summary(strategy_used, response)
+        return response
+
     law_matches = resolver_ley_por_nombre(nombreLey or consulta)
     response = {
         "query": consulta,
@@ -979,6 +1033,38 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
         "handler": buscar_precedentes_avanzado,
+    },
+    "buscarSentenciasTEPJF": {
+        "description": "Busca sentencias del Tribunal Electoral (TEPJF) por terminos y filtros. Usala para sentencias o materia electoral.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string", "description": "Terminos AND; usa | para varios"},
+                "page": {"type": "integer", "minimum": 1},
+                "sala": {"type": "string"},
+                "medio": {"type": "string"},
+                "anio": {"type": "string"},
+                "idMagistrado": {"type": "string"},
+                "sentidoResolucion": {"type": "string"},
+                "tipo": {"type": "integer"},
+                "includeRaw": {"type": "boolean"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": buscar_sentencias_tepjf,
+    },
+    "buscarSentenciasTEPJFAvanzado": {
+        "description": "Busca sentencias TEPJF con payload avanzado (and, or, filtros, paginacion).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "object", "properties": {}, "additionalProperties": True},
+                "includeRaw": {"type": "boolean"},
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        "handler": buscar_sentencias_tepjf_avanzado,
     },
     "buscarLegislacionSCJN": {
         "description": "Busca ordenamientos y leyes en el Buscador Juridico SCJN/SIL. Usala cuando la consulta sea sobre legislacion SCJN, SIL u ordenamientos fuera del catalogo Jurislex.",
@@ -1141,7 +1227,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "consulta": {"type": "string"},
-                "estrategia": {"type": "string", "enum": ["auto", "ley", "articulo", "jurisprudencia", "precedente"]},
+                "estrategia": {"type": "string", "enum": ["auto", "ley", "articulo", "jurisprudencia", "precedente", "sentencia"]},
                 "nombreLey": {"type": "string"},
                 "numeroArticulo": {"type": "integer"},
                 "matchIndex": {"type": "integer", "minimum": 0},
@@ -1200,7 +1286,8 @@ PROMPTS: dict[str, dict[str, Any]] = {
             "o resolverLeyPorNombre; 2) para articulos usa buscarArticuloPorLeyYNumero o buscarArticulosJurislex; "
             "3) para jurisprudencia usa buscarJurisprudencia y luego obtenerDetalleJurisprudencia; si piden texto completo de una tesis, no te quedes en el resumen de busqueda y muestra `textoPlano` del detalle; "
             "4) para precedentes usa buscarPrecedentes; 5) para legislacion del Buscador Juridico SCJN/SIL usa buscarLegislacionSCJN, obtenerDetalleLegislacionSCJN y buscarArticulosLegislacionSCJN; "
-            "6) si buscarLey devuelve coincidencias utiles del catalogo, no saltes a web todavia; 7) si no hay resultados, dilo claramente y no inventes datos."
+            "6) para sentencias o materia electoral (TEPJF) usa buscarSentenciasTEPJF; "
+            "7) si buscarLey devuelve coincidencias utiles del catalogo, no saltes a web todavia; 8) si no hay resultados, dilo claramente y no inventes datos."
         ),
     },
     "buscar-articulo": {

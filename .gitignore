@@ -1,3 +1,13 @@
 .vercel
 
 .DS_Store
+
+# Entornos y artefactos locales
+.venv/
+__pycache__/
+*.pyc
+
+# Notas/instrucciones locales (no se publican)
+AGENTS.md
+CLAUDE.md
+DEPLOYMENT.md

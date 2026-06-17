@@ -215,6 +215,23 @@ def check_precedentes_search():
         raise ValueError("sin registroDigital en resultado")
 
 
+def check_sentencias_search():
+    status, data = get_json(
+        "/sentencias/buscar",
+        {
+            "q": "nulidad",
+            "page": 1,
+        },
+    )
+    if status != 200:
+        raise ValueError(f"HTTP {status}")
+    if data.get("count", 0) < 1:
+        raise ValueError("count < 1")
+    items = data.get("items") or []
+    if not items or not items[0].get("expediente"):
+        raise ValueError("sin expediente en resultado")
+
+
 def check_legislacion_search():
     status, data = get_json(
         "/legislacion/buscar",
@@ -305,6 +322,7 @@ def main():
         ("jurislex search", check_jurislex_search),
         ("jurislex detail", check_jurislex_detail),
         ("precedentes search", check_precedentes_search),
+        ("sentencias search", check_sentencias_search),
         ("legislacion search", check_legislacion_search),
         ("legislacion detail", check_legislacion_detail),
         ("legislacion articulos", check_legislacion_articulos_search),

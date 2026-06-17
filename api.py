@@ -62,6 +62,7 @@ with open(os.path.join(BASE_DIR, "IdLegislaciones.json"), encoding="utf-8") as f
 SJF_BASE = os.getenv("SJF_BASE", "https://sjf2.scjn.gob.mx/services/sjftesismicroservice/api/public")
 JURISLEX_BASE = os.getenv("JURISLEX_BASE", "https://jurislex.scjn.gob.mx/Legislaciones.Datos64/Aplicacion/Legislaciones.svc/web")
 BJ_SCJN_BASE = os.getenv("BJ_SCJN_BASE", "https://bj.scjn.gob.mx/api/v1/bj")
+TEPJF_BASE = os.getenv("TEPJF_BASE", "https://www.te.gob.mx/buscador-api/api/rest/consulta/api/rest/consulta")
 
 # Compiled regex patterns — built once at import time
 _RE_WHITESPACE = re.compile(r"\s+")
@@ -423,6 +424,16 @@ def _bj_scjn_headers(content_type: bool = False) -> dict:
     )
 
 
+def _tepjf_headers() -> dict:
+    # El upstream TEPJF usa multipart/form-data; httpx fija el Content-Type con su boundary,
+    # asi que aqui no se pide content_type.
+    return _build_headers(
+        "https://www.te.gob.mx",
+        "https://www.te.gob.mx/BuscadorSentencias/",
+        "TEPJF_COOKIE",
+    )
+
+
 def _http_json(
     url: str,
     method: str = "GET",
@@ -457,6 +468,35 @@ def _http_json(
         return 502, {"error": "upstream request failed", "errorType": type(exc).__name__, "detail": str(exc)}
     except Exception as exc:
         logger.error("unexpected error for %s %s: %s", method, url, exc)
+        return 502, {"error": "upstream request failed", "errorType": type(exc).__name__, "detail": str(exc)}
+
+
+def _http_multipart(
+    url: str,
+    fields: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> tuple[int, Any]:
+    # httpx envia multipart/form-data cuando se pasa files=; usar (None, valor) lo trata
+    # como campo de texto sin nombre de archivo.
+    files = {key: (None, "" if value is None else str(value)) for key, value in (fields or {}).items()}
+    try:
+        resp = _http_client.request(method="POST", url=url, files=files, headers=headers or {})
+        try:
+            parsed: Any = resp.json()
+        except Exception:
+            parsed = {"rawText": resp.text}
+        status = resp.status_code
+        if status >= 400:
+            logger.warning("upstream HTTP error %s for POST %s", status, url)
+        return status, parsed
+    except httpx.TimeoutException as exc:
+        logger.error("upstream timeout for POST %s", url)
+        return 504, {"error": "upstream request timed out", "errorType": type(exc).__name__, "detail": str(exc)}
+    except httpx.RequestError as exc:
+        logger.error("upstream request error for POST %s: %s", url, exc)
+        return 502, {"error": "upstream request failed", "errorType": type(exc).__name__, "detail": str(exc)}
+    except Exception as exc:
+        logger.error("unexpected error for POST %s: %s", url, exc)
         return 502, {"error": "upstream request failed", "errorType": type(exc).__name__, "detail": str(exc)}
 
 
@@ -2491,6 +2531,148 @@ def scjn_precedentes_buscar_post(
     return _precedentes_buscar_core(req_payload, _to_bool(payload.get("includeRaw"), includeRaw))
 
 
+def _extract_tepjf_items(data: Any) -> list:
+    if isinstance(data, dict) and isinstance(data.get("resultados"), list):
+        return data["resultados"]
+    return []
+
+
+def _normalize_tepjf_item(item: Any, include_raw: bool = False) -> dict:
+    if not isinstance(item, dict):
+        return {}
+    url = item.get("url")
+    if isinstance(url, list):
+        documento_url = url[0] if url else ""
+    else:
+        documento_url = url or ""
+
+    normalized = {
+        "expediente": item.get("titulo") or "",
+        "sala": item.get("sala") or "",
+        "medio": item.get("medio") or "",
+        "anio": item.get("anho") or "",
+        "fechaResolucion": item.get("fecharesolucion") or "",
+        "fechaRecepcion": item.get("fecharerecepcion") or "",
+        "magistrado": item.get("magistrado") or "",
+        "secretario": item.get("secretario") or "",
+        "actor": item.get("actor") or "",
+        "autoridad": item.get("autoridad") or "",
+        "entidad": item.get("entidad") or "",
+        "actoImpugnado": _strip_html(item.get("acto") or ""),
+        "sentidoResolucion": item.get("sentidoresolucion") or "",
+        "tematica": item.get("tematizacion") or "",
+        "tipoVotacion": item.get("tipovotacion") or "",
+        "resumen": _strip_html(item.get("resumen") or item.get("descripcion") or ""),
+        "documentoUrl": documento_url,
+    }
+    if include_raw:
+        normalized["raw"] = item
+    return normalized
+
+
+def _tepjf_form(
+    and_terms: str = "",
+    or_terms: str = "",
+    tipo: int = 2,
+    pagina: int = 1,
+    sala: str = "",
+    medio: str = "",
+    anio: str = "",
+    idmagistrado: str = "",
+    sentidoresolucion: str = "",
+) -> dict:
+    fields = {
+        "and": str(and_terms or ""),
+        "type": str(tipo),
+        "pagina": str(pagina),
+        "sala": str(sala or ""),
+        "medio": str(medio or ""),
+        "anio": str(anio or ""),
+        "idmagistrado": str(idmagistrado or ""),
+        "sentidoresolucion": str(sentidoresolucion or ""),
+    }
+    if or_terms:
+        fields["or"] = str(or_terms)
+    return fields
+
+
+def _tepjf_buscar_core(fields: dict, page: int, query: str, include_raw: bool) -> Any:
+    status, data = _http_multipart(TEPJF_BASE, fields, headers=_tepjf_headers())
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "TEPJF sentencias request failed", "status": status, "upstream": data},
+        )
+    resultados = _extract_tepjf_items(data)
+    items = [_normalize_tepjf_item(item, include_raw=include_raw) for item in resultados]
+    total = _to_int(data.get("total") if isinstance(data, dict) else None, len(items))
+    total_pages = _to_int(data.get("paginador") if isinstance(data, dict) else None, 0)
+    return {
+        "query": query,
+        "total": total,
+        "totalPages": total_pages,
+        "page": page,
+        "size": len(items),
+        "count": len(items),
+        "hasMore": page < total_pages,
+        "salas": data.get("salas") if isinstance(data, dict) else None,
+        "medios": data.get("medios") if isinstance(data, dict) else None,
+        "anios": data.get("anios") if isinstance(data, dict) else None,
+        "items": items,
+    }
+
+
+@app.get("/sentencias/buscar")
+@app.get("/tepjf/sentencias/buscar")
+def tepjf_sentencias_buscar(
+    q: str = Query(default="", description="Terminos AND; usa | para varios (ej. nulidad|computo)"),
+    page: int = Query(default=1, ge=1),
+    sala: str = Query(default="", description="sup, sg, sx, sdf, st, sm, scm, sre"),
+    medio: str = Query(default="", description="jdc, rec, jrc, rap, je..."),
+    anio: str = Query(default=""),
+    idMagistrado: str = Query(default=""),
+    sentidoResolucion: str = Query(default=""),
+    tipo: int = Query(default=2),
+    includeRaw: bool = Query(default=False),
+):
+    fields = _tepjf_form(
+        and_terms=q,
+        tipo=tipo,
+        pagina=page,
+        sala=sala,
+        medio=medio,
+        anio=anio,
+        idmagistrado=idMagistrado,
+        sentidoresolucion=sentidoResolucion,
+    )
+    return _tepjf_buscar_core(fields, page, q, includeRaw)
+
+
+@app.post("/sentencias/buscar")
+@app.post("/tepjf/sentencias/buscar")
+def tepjf_sentencias_buscar_post(
+    includeRaw: bool = Query(default=False),
+    payload: dict = Body(default={}),
+):
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"error": "Invalid payload"})
+
+    page = max(1, _to_int(payload.get("page") or payload.get("pagina"), 1))
+    fields = _tepjf_form(
+        and_terms=payload.get("and") or payload.get("q") or "",
+        or_terms=payload.get("or") or "",
+        tipo=_to_int(payload.get("type") or payload.get("tipo"), 2),
+        pagina=page,
+        sala=payload.get("sala") or "",
+        medio=payload.get("medio") or "",
+        anio=payload.get("anio") or "",
+        idmagistrado=payload.get("idmagistrado") or payload.get("idMagistrado") or "",
+        sentidoresolucion=payload.get("sentidoresolucion") or payload.get("sentidoResolucion") or "",
+    )
+    include_raw = _to_bool(payload.get("includeRaw"), includeRaw)
+    return _tepjf_buscar_core(fields, page, fields["and"], include_raw)
+
+
 @app.get("/legislacion/buscar")
 @app.get("/scjn/legislacion/buscar")
 def scjn_legislacion_buscar(
@@ -3136,6 +3318,21 @@ def deep_health_check():
             "name": "jurislex-search",
             "ok": jl_ok,
             "detail": {"status": jl_status, "count": len(jl_results)},
+        }
+    )
+
+    tepjf_status, tepjf_data = _http_multipart(
+        TEPJF_BASE,
+        _tepjf_form(and_terms="amparo", pagina=1),
+        headers=_tepjf_headers(),
+    )
+    tepjf_items = _extract_tepjf_items(tepjf_data)
+    tepjf_ok = tepjf_status == 200 and isinstance(tepjf_data, dict)
+    checks.append(
+        {
+            "name": "tepjf-sentencias",
+            "ok": tepjf_ok,
+            "detail": {"status": tepjf_status, "count": len(tepjf_items)},
         }
     )
 
