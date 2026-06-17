@@ -54,7 +54,7 @@ Ordina puede usarse de tres formas:
 
 1. como chat o GPT especializado;
 2. como API HTTP;
-3. como servidor MCP para Claude Desktop, Cursor, IDEs o agentes.
+3. como servidor MCP para clientes compatibles (Cursor, IDEs o agentes).
 
 Qué obtienes con eso:
 
@@ -394,7 +394,7 @@ Sólo son necesarias si alguna fuente bloquea solicitudes:
 
 Ordina-engine también puede usarse como servidor MCP por `stdio` para clientes compatibles.
 
-Esto te permite usar Ordina como backend jurídico para Claude Desktop u otros clientes MCP sin tener que reimplementar los flujos de leyes, artículos o jurisprudencia.
+Esto te permite usar Ordina como backend jurídico para clientes MCP compatibles sin tener que reimplementar los flujos de leyes, artículos o jurisprudencia.
 
 Configuración mínima:
 
