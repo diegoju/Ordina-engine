@@ -75,7 +75,10 @@ _RE_JURIS_CLAVE = re.compile(r"\b(?:jurisprudencia|tesis(?:\s+aislada)?|criterio
 _RE_J_CLAVE_COMPACTA = re.compile(r"\b(?:P\.|[12]a\.)/?J\.\s*\d+/\d{4}(?:\s*\(\d{1,2}a\.\))?(?!\w)", re.IGNORECASE)
 _RE_TESIS_AISLADA_CLAVE = re.compile(r"\b(?:criterio\s+aislad[oa]|tesis\s+aislada)\s+((?:P\.|[12]a\.)\s*[A-Z]{1,6}/\d{4}(?:\s*\(\d{1,2}a\.\))?)", re.IGNORECASE)
 _RE_TESIS_CLAVE_COMPACTA = re.compile(r"\b(?:[12](?:a\.|ª)\s*[A-ZÁÉÍÓÚÑ]{1,6}/\d{4}(?:\s*\(\d{1,2}(?:a\.|ª)\))?)", re.IGNORECASE)
-_RE_EXPEDIENTE_SUP = re.compile(r"\bSUP-[A-Z]{2,6}(?:-[A-Z]{1,6})?-\d+/\d{4}\b", re.IGNORECASE)
+_RE_EXPEDIENTE_TEPJF = re.compile(
+    r"\b(?:SUP|SG|SM|SX|SDF|SCM|ST|SRE)-[A-Z]{2,6}(?:-[A-Z]{1,6})?-\d+[-/]\d{4}\b",
+    re.IGNORECASE,
+)
 _RE_RUBRO = re.compile(r"\bde\s+rubro:\s*([^\n]{20,500})", re.IGNORECASE)
 _RE_ARTICULO_NORMA_INTERNA = re.compile(
     r"\b((?:art(?:[íi]culo|\.)|articulos?)\s+\d+[A-Za-z\-]*(?:\s*,?\s*(?:numerales?|incisos?|fracci[oó]n|p[aá]rrafo|último\s+p[aá]rrafo|transitorio)[^.;:]{0,80})?)\s+de(?:l| la| los| las)?\s+(Estatutos?|Reglamento(?:\s+Interno)?|Convocatoria)\b",
@@ -897,7 +900,13 @@ def _normalize_bj_legislacion_detail(data: dict, documento_id: int, include_raw:
 
 
 def _extract_article_numbers(fragment: str) -> list[str]:
-    return re.findall(r"\d+[A-Za-z\-]*", str(fragment or ""))
+    tokens = re.findall(r"\d+[A-Za-z\-º°]*", str(fragment or ""))
+    numeros = []
+    for token in tokens:
+        # Normalizar ordinal ("1o", "5º", "12°" -> "1", "5", "12"); conservar sufijos reales ("167-B", "16Bis")
+        ordinal = re.match(r"^(\d+)[ºo°]$", token)
+        numeros.append(ordinal.group(1) if ordinal else token)
+    return numeros
 
 
 def _split_article_references(fragment: str) -> list[str]:
@@ -1784,7 +1793,7 @@ def _extract_citas(texto: str, abbreviations: Optional[list[dict]] = None) -> li
             }),
         )
 
-    for match in _RE_EXPEDIENTE_SUP.finditer(texto_busqueda):
+    for match in _RE_EXPEDIENTE_TEPJF.finditer(texto_busqueda):
         _append_cita(
             citas,
             seen,
