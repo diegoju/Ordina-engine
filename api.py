@@ -71,7 +71,7 @@ _RE_HTML_TAG = re.compile(r"<[^>]+>")
 _RE_EXCESS_NEWLINES = re.compile(r"\n{3,}")
 _RE_INLINE_NEWLINE = re.compile(r"(?<!\n)\n(?!\n)")
 _RE_REGISTRO_DIGITAL = re.compile(r"\bregistro\s+digital\s+(\d{6,8})\b", re.IGNORECASE)
-_RE_JURIS_CLAVE = re.compile(r"\b(?:jurisprudencia|tesis(?:\s+aislada)?|criterio\s+aislad[oa])\s+([A-Z0-9][A-Z0-9./\- ]{4,50}\d(?:\s*\([^\)]+\))?)", re.IGNORECASE)
+_RE_JURIS_CLAVE = re.compile(r"\b(?:jurisprudencia|tesis(?:\s+aislada)?|criterio\s+aislad[oa])\s+(?!de\s+registro\b)([A-Z0-9][A-Z0-9./\- ]{4,50}\d(?:\s*\([^\)]+\))?)", re.IGNORECASE)
 _RE_J_CLAVE_COMPACTA = re.compile(r"\b(?:P\.|[12]a\.)/?J\.\s*\d+/\d{4}(?:\s*\(\d{1,2}a\.\))?(?!\w)", re.IGNORECASE)
 _RE_TESIS_AISLADA_CLAVE = re.compile(r"\b(?:criterio\s+aislad[oa]|tesis\s+aislada)\s+((?:P\.|[12]a\.)\s*[A-Z]{1,6}/\d{4}(?:\s*\(\d{1,2}a\.\))?)", re.IGNORECASE)
 _RE_TESIS_CLAVE_COMPACTA = re.compile(r"\b(?:[12](?:a\.|ª)\s*[A-ZÁÉÍÓÚÑ]{1,6}/\d{4}(?:\s*\(\d{1,2}(?:a\.|ª)\))?)", re.IGNORECASE)
@@ -244,6 +244,11 @@ def _clean_law_fragment(value: str) -> str:
     fragment = str(value or "").strip(" ,)")
     normalized = _normalize_text(fragment)
     trailing_markers = [
+        ", así como",
+        " así como",
+        ", al igual que",
+        ", entre otras",
+        ", entre otros",
         ", los cuales establecen",
         ", que define",
         ", que definen",
