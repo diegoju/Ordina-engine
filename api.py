@@ -63,6 +63,7 @@ SJF_BASE = os.getenv("SJF_BASE", "https://sjf2.scjn.gob.mx/services/sjftesismicr
 JURISLEX_BASE = os.getenv("JURISLEX_BASE", "https://jurislex.scjn.gob.mx/Legislaciones.Datos64/Aplicacion/Legislaciones.svc/web")
 BJ_SCJN_BASE = os.getenv("BJ_SCJN_BASE", "https://bj.scjn.gob.mx/api/v1/bj")
 TEPJF_BASE = os.getenv("TEPJF_BASE", "https://www.te.gob.mx/buscador-api/api/rest/consulta/api/rest/consulta")
+TEPJF_CONVERT_PDF = os.getenv("TEPJF_CONVERT_PDF", "https://www.te.gob.mx/api/word/convert-pdf/")
 
 # Compiled regex patterns — built once at import time
 _RE_WHITESPACE = re.compile(r"\s+")
@@ -2537,6 +2538,31 @@ def _extract_tepjf_items(data: Any) -> list:
     return []
 
 
+def _tepjf_relpath_from_url(url: str) -> str:
+    """Extrae la ruta relativa que espera el conversor (la parte tras '/sword/')."""
+    if not url:
+        return ""
+    marker = "/sword/"
+    idx = url.find(marker)
+    if idx >= 0:
+        return url[idx + len(marker):]
+    return url.lstrip("/")
+
+
+def _pdf_to_text(content: bytes) -> tuple[str, int]:
+    """Extrae texto plano de un PDF. Devuelve (texto, numero_de_paginas)."""
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(content))
+        parts = [(page.extract_text() or "") for page in reader.pages]
+        texto = re.sub(r"\n{3,}", "\n\n", "\n".join(parts)).strip()
+        return texto, len(reader.pages)
+    except Exception as exc:
+        logger.warning("no se pudo extraer texto del PDF TEPJF: %s", exc)
+        return "", 0
+
+
 def _normalize_tepjf_item(item: Any, include_raw: bool = False) -> dict:
     if not isinstance(item, dict):
         return {}
@@ -2548,6 +2574,7 @@ def _normalize_tepjf_item(item: Any, include_raw: bool = False) -> dict:
 
     normalized = {
         "expediente": item.get("titulo") or "",
+        "documentoFilename": _tepjf_relpath_from_url(documento_url),
         "sala": item.get("sala") or "",
         "medio": item.get("medio") or "",
         "anio": item.get("anho") or "",
@@ -2671,6 +2698,53 @@ def tepjf_sentencias_buscar_post(
     )
     include_raw = _to_bool(payload.get("includeRaw"), includeRaw)
     return _tepjf_buscar_core(fields, page, fields["and"], include_raw)
+
+
+@app.get("/sentencias/detalle")
+@app.get("/tepjf/sentencias/detalle")
+def tepjf_sentencia_detalle(
+    filename: str = Query(default="", description="Ruta relativa de la sentencia (campo documentoFilename de la busqueda)"),
+    url: str = Query(default="", description="Alternativa: documentoUrl devuelto por la busqueda"),
+    includeRaw: bool = Query(default=False, description="Si es true, incluye tambien el PDF en base64"),
+):
+    rel = (filename or "").strip() or _tepjf_relpath_from_url(url)
+    if not rel:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Falta 'filename' o 'url' de la sentencia"},
+        )
+
+    headers = {**_tepjf_headers(), "Content-Type": "application/json"}
+    status, data = _http_json(TEPJF_CONVERT_PDF, method="POST", body={"filename": rel}, headers=headers)
+    if status >= 400:
+        return JSONResponse(
+            status_code=status,
+            content={"error": "TEPJF convert-pdf request failed", "status": status, "upstream": data},
+        )
+
+    b64 = data.get("Archivo") if isinstance(data, dict) else None
+    if not b64:
+        return JSONResponse(
+            status_code=502,
+            content={"error": "Respuesta inesperada del conversor TEPJF", "upstream": data if includeRaw else None},
+        )
+
+    try:
+        pdf_bytes = base64.b64decode(b64)
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "No se pudo decodificar el documento"})
+
+    texto, paginas = _pdf_to_text(pdf_bytes)
+    response = {
+        "filename": rel,
+        "documentoUrl": url or None,
+        "paginas": paginas,
+        "texto": texto,
+        "textoPlano": texto,
+    }
+    if includeRaw:
+        response["pdfBase64"] = b64
+    return response
 
 
 @app.get("/legislacion/buscar")

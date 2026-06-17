@@ -518,6 +518,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /sentencias/detalle:
+    get:
+      operationId: obtenerDetalleSentenciaTEPJF
+      summary: Obtener el texto completo de una sentencia TEPJF
+      description: Pasa el documentoFilename (recomendado) o el documentoUrl que devuelve la busqueda de sentencias.
+      parameters:
+        - name: filename
+          in: query
+          required: false
+          description: Ruta relativa de la sentencia (campo documentoFilename de la busqueda)
+          schema:
+            type: string
+          example: DF/AG/2025/SCM-AG-0031-2025.docx
+        - name: url
+          in: query
+          required: false
+          description: Alternativa, el documentoUrl devuelto por la busqueda
+          schema:
+            type: string
+        - name: includeRaw
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Texto plano de la sentencia
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentenciaDetalleResponse"
+        "400":
+          description: Falta filename o url
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Error al obtener o convertir el documento TEPJF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /legislacion/buscar:
     get:
       operationId: buscarLegislacionSCJN
@@ -2099,11 +2144,35 @@ components:
           type: string
         resumen:
           type: string
+        documentoFilename:
+          type: string
+          description: Ruta relativa para obtenerDetalleSentenciaTEPJF
         documentoUrl:
           type: string
         raw:
           type: object
           properties: {}
+
+    SentenciaDetalleResponse:
+      type: object
+      properties:
+        filename:
+          type: string
+        documentoUrl:
+          type: string
+          nullable: true
+        paginas:
+          type: integer
+        texto:
+          type: string
+        textoPlano:
+          type: string
+        pdfBase64:
+          type: string
+          description: Solo si includeRaw=true
+      required:
+        - filename
+        - texto
 
     SentenciasSearchResponse:
       type: object

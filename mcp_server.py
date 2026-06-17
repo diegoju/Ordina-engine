@@ -586,6 +586,15 @@ def buscar_sentencias_tepjf_avanzado(payload: dict[str, Any], includeRaw: bool =
     return _unwrap_fastapi_response(result)
 
 
+def obtener_detalle_sentencia_tepjf(
+    filename: str = "",
+    url: str = "",
+    includeRaw: bool = False,
+) -> Any:
+    result = ordina_api.tepjf_sentencia_detalle(filename=filename, url=url, includeRaw=includeRaw)
+    return _unwrap_fastapi_response(result)
+
+
 def buscar_legislacion_scjn(
     q: str = "",
     page: int = 1,
@@ -1065,6 +1074,19 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
         "handler": buscar_sentencias_tepjf_avanzado,
+    },
+    "obtenerDetalleSentenciaTEPJF": {
+        "description": "Obtiene el texto completo de una sentencia TEPJF. Pasa el documentoFilename (o documentoUrl) que devuelve buscarSentenciasTEPJF.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "documentoFilename de la busqueda"},
+                "url": {"type": "string", "description": "Alternativa: documentoUrl de la busqueda"},
+                "includeRaw": {"type": "boolean", "description": "Incluir el PDF en base64"},
+            },
+            "additionalProperties": False,
+        },
+        "handler": obtener_detalle_sentencia_tepjf,
     },
     "buscarLegislacionSCJN": {
         "description": "Busca ordenamientos y leyes en el Buscador Juridico SCJN/SIL. Usala cuando la consulta sea sobre legislacion SCJN, SIL u ordenamientos fuera del catalogo Jurislex.",

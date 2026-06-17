@@ -292,21 +292,30 @@ Busca sentencias del Buscador de Sentencias del TEPJF, con respuesta normalizada
 - `GET /sentencias/buscar`
 - `POST /sentencias/buscar`
 
-Alias: `GET|POST /tepjf/sentencias/buscar`.
+Para leer el texto completo de una sentencia específica:
+
+- `GET /sentencias/detalle`
+
+Alias: `GET|POST /tepjf/sentencias/buscar`, `GET /tepjf/sentencias/detalle`.
 
 Ejemplo:
 
 ```bash
+# 1) Buscar y obtener el documentoFilename del resultado
 curl --get "https://ordina-engine.vercel.app/sentencias/buscar" \
   --data-urlencode "q=violencia politica|nulidad" \
   --data-urlencode "page=1"
+
+# 2) Traer el texto completo de esa sentencia
+curl --get "https://ordina-engine.vercel.app/sentencias/detalle" \
+  --data-urlencode "filename=DF/AG/2025/SCM-AG-0031-2025.docx"
 ```
 
 Notas:
 
-- `q` admite varios términos con operador AND separados por `|`.
+- `q` admite varios términos con operador AND separados por `|`, frase exacta con comillas (`"..."`) y comodín con `*`.
 - Filtros opcionales: `sala`, `medio`, `anio`, `idMagistrado`, `sentidoResolucion`.
-- El campo `documentoUrl` de cada resultado apunta a la intranet del TEPJF y puede no ser accesible públicamente.
+- `/sentencias/detalle` toma el `documentoFilename` (o `documentoUrl`) de la búsqueda, convierte el documento a PDF en el TEPJF y devuelve el texto plano (`textoPlano`). Con `includeRaw=true` agrega el PDF en base64.
 - El sitio del TEPJF usa protección anti-bot; si las solicitudes son bloqueadas, configura `TEPJF_COOKIE`.
 
 ### Legislación SIL en el buscador jurídico SCJN
